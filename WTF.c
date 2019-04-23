@@ -102,7 +102,18 @@ void configure(char* ip, char* port, int argc){ //create file with IP and port o
 		ip_port = strcat(ip_port, "\n");
 		write(conf, ip_port, strlen(ip_port));
 }
-
+void create(char* name, int argc){
+	if (argc !=3){
+		printf("Incorrect number of arguments for create\n");
+		exit(1);
+	}
+	int sockfd;
+	char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
+	str = strcpy(str, "create ");
+	str = strcat(str, name);
+	//printf("str is %s\n", str);
+	//connectServer(sockfd);
+}
 int main(int argc, char *argv[]){
 	int sockfd;
 	if (strcmp(argv[1],"configure") == 0){
@@ -110,7 +121,8 @@ int main(int argc, char *argv[]){
 		connectServer(sockfd);
 		close(sockfd);
 	}
-	else if strcmp(argv[1], "create") == 0){
-		printf("create\n");
+	else if (strcmp(argv[1], "create" )== 0){
+		create(argv[2], argc);
+		//printf("create\n");
 	}
 }
