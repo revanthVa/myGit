@@ -28,7 +28,7 @@ void func(int sockfd)
     } 
 } 
 
-void connectServer(int sockfd){ //gets ip and port from file and connects
+int connectServer(){ //gets ip and port from file and connects
 	int conf;
 	char *ip_word;
 	char *port_word;
@@ -65,7 +65,7 @@ void connectServer(int sockfd){ //gets ip and port from file and connects
 	int port = atoi(port_word);	//convert string port to int
 	serverIP = gethostbyname(ip_word);
 	//printf("serverIP %s\n", serverIP->h_addr);
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1){
 		printf("socket could not be created\n");
 		exit(1);
@@ -84,7 +84,7 @@ void connectServer(int sockfd){ //gets ip and port from file and connects
 	}
 	else
 		printf("connected to the server\n");
-	func(sockfd);
+		return sockfd;
 }
 void configure(char* ip, char* port, int argc){ //create file with IP and port of server
 		if (argc != 4){
@@ -107,19 +107,20 @@ void create(char* name, int argc){
 		printf("Incorrect number of arguments for create\n");
 		exit(1);
 	}
-	int sockfd;
 	char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
 	str = strcpy(str, "create ");
 	str = strcat(str, name);
 	//printf("str is %s\n", str);
-	//connectServer(sockfd);
+	int sockfd = connectServer();
+	write(sockfd, str, strlen(str)+1);
+	close(sockfd);
 }
 int main(int argc, char *argv[]){
-	int sockfd;
 	if (strcmp(argv[1],"configure") == 0){
 		configure(argv[2], argv[3], argc);
-		connectServer(sockfd);
-		close(sockfd);
+		//int sockfd = connectServer();
+		//func(sockfd);
+		//close(sockfd);
 	}
 	else if (strcmp(argv[1], "create" )== 0){
 		create(argv[2], argc);
