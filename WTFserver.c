@@ -5,11 +5,43 @@
 #include <string.h> 
 #include <sys/socket.h> 
 #include <sys/types.h> 
+#include <dirent.h>
+#include <errno.h>
+#include <sys/stat.h> 
+#include <fcntl.h>
 #define MAX 80 
-#define PORT 8721
+#define PORT 8725
 #define SA struct sockaddr 
   
 // Function designed for chat between client and server. 
+void create(char* buff){
+    char* token = strtok(buff, ";");
+    printf("token is %s\n", token);
+    token = strtok(NULL, " "); 
+    printf("name: %s\n", token);
+    DIR* dir = opendir(token);
+    if (dir){	//directory exists
+    	printf("Project already exists\n");
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+		mkdir(token, 0700);
+	    char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+    	path = strcpy(path, token);
+    	path = strcat(path, "/.Manifest");
+    	int manifestFile;
+    	manifestFile = creat(path, O_WRONLY | 0600);
+    	if(manifestFile == -1){
+       		printf("cannot create .Manifest\n");
+   		}
+    	write(manifestFile, "1", 1);
+    	close(manifestFile);
+    }
+    else{
+    	printf("Error creating project directory\n");
+    }
+}
+
 void func(int sockfd) 
 { 
     char buff[MAX]; 
@@ -21,13 +53,12 @@ void func(int sockfd)
         // read the message from client and copy it in buffer 
         read(sockfd, buff, sizeof(buff)); 
         // print buffer which contains the client contents 
-        printf("From client: %s\t To client : ", buff); 
+        printf("From client: %s\t To client : ", buff);
+        //create(buff);
         bzero(buff, MAX); 
         n = 0; 
         // copy server message in the buffer 
-        while ((buff[n++] = getchar()) != '\n') 
-            ; 
-  
+        while ((buff[n++] = getchar()) != '\n'); 
         // and send that buffer to client 
         write(sockfd, buff, sizeof(buff)); 
   
