@@ -88,7 +88,7 @@ int connectServer(){ //gets ip and port from file and connects
 }
 void configure(char* ip, char* port, int argc){ //create file with IP and port of server
 		if (argc != 4){
-			printf("Incorrect number of arguments for configure");
+			printf("Incorrect number of arguments for configure\n");
 			exit(1);
 		}
 		int conf;
