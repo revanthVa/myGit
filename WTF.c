@@ -263,11 +263,11 @@ void removeFile(char* dirName, char* fileName){
 		printf("%s doesn't exist\n", dirName);
 		exit(1);
 	}
-	char* filepath = (char*)malloc(sizeof(char)*(strlen(dirName)+strlen(fileName)+4));
-	filepath = strcpy(filepath, dirName);
-	filepath = strcat(filepath, "/");
-	filepath = strcat(filepath, fileName);
-	if (access(filepath, F_OK) == -1){ // file doesn't exist
+	//char* filepath = (char*)malloc(sizeof(char)*(strlen(dirName)+strlen(fileName)+4));
+	//filepath = strcpy(filepath, dirName);
+	//filepath = strcat(filepath, "/");
+	//filepath = strcat(filepath, fileName);
+	if (access(fileName, F_OK) == -1){ // file doesn't exist
 		printf("%s doesn't exist\n", fileName);
 		exit(1);
 	}
@@ -302,6 +302,7 @@ void removeFile(char* dirName, char* fileName){
 	}
 	
 }
+
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
 		printf("Incorrect number of arguments");
