@@ -286,6 +286,10 @@ void removeFile(char* dirName, char* fileName){
 	char c[size+1];
 	int tracker = 0;
 	int linesize = 0;
+	char* newFilename = (char*)malloc(sizeof(char)*(strlen(dirName)+17));
+	newFilename = strcpy(newFilename, dirName);
+	newFilename = strcat(newFilename, "/tempfilerename");
+	int newFile = creat(newFilename, O_APPEND | O_WRONLY | 0600);
 	if(read(manifest, c, size) != 0){
 		if (strstr(c, fileName) == NULL){
 			printf("%s is not in the manifest\n", fileName);
@@ -297,10 +301,23 @@ void removeFile(char* dirName, char* fileName){
 				tracker++;
 				linesize++;
 			}
+			char* line = (char*)malloc(sizeof(char)*linesize+1);
+			memcpy(line, &c[tracker-linesize], linesize);
+			line[strlen(line)] = '\0';
+			printf("line is %s\n", line);
+			if (strstr(line, fileName) != NULL){	//skips line
+				tracker++;
+				continue;
+			}
+			write(newFile, line, strlen(line));
+			write(newFile, "\n", 1);
 			tracker++;
 		}
 	}
-	
+	close(manifest);
+	close(newFile);
+	remove(manifestPath);
+	rename(newFilename, manifestPath);
 }
 
 int main(int argc, char *argv[]){
