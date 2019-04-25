@@ -1,8 +1,9 @@
-#include <netdb.h> 
-#include <netinet/in.h> 
+#include <netdb.h>
+#include <netinet/in.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h> 
-#include <string.h> 
+#include <string.h>
 #include <sys/socket.h> 
 #include <sys/types.h> 
 #include <dirent.h>
@@ -106,16 +107,26 @@ int main()
   
     // Accept the data packet from client and verification 
     connfd = accept(sockfd, (SA*)&cli, &len); 
+
+    while(!(connfd < 0)){
+	  printf("server accept the client...\n");
+	  //not sure if this works right here (need to test), thread also creates warning when compiled but works
+	  //also need to make a struct to keep track of threads to close them properly when reaching SIGINT(CTRL+C)
+	  pthread_t thread_id;
+	  pthread_create(&thread_id, NULL, func, (void*)&connfd);
+	  pthread_join(thread_id, NULL);
+	  printf("thread done\n");
+	  connfd = accept(sockfd, (SA*)&cli, &len); 
+    }
+    
     if (connfd < 0) { 
-        printf("server acccept failed...\n"); 
-        exit(0); 
+	  printf("server accept failed...\n"); 
+	  exit(0); 
     } 
-    else
-        printf("server acccept the client...\n"); 
-  
     // Function for chatting between client and server 
-    func(connfd); 
-  
+    //func(connfd); 
+    printf("server closing\n");
+
     // After chatting close the socket 
     close(sockfd); 
 } 
