@@ -105,7 +105,7 @@ void configure(char* ip, char* port){ //create file with IP and port of server
 
 void create(char* name){
 	char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
-	str = strcpy(str, "create;");
+	str = strcpy(str, "create:");
 	str = strcat(str, name);
 	//printf("str is %s\n", str);
 	int sockfd = connectServer();
@@ -200,14 +200,14 @@ void checkAdd(char* fileName, char* dirName, char* digest){	//check if file is a
 				char* version = (char*)malloc(sizeof(char)*(numSize+1));
 				version[strlen(version)] = '\0';
 				memcpy(version, &c[tracker+2-linesize], numSize);
-				int ver = atoi(version);
-				ver++;
-				char strVer[ver+1];	//updated version number
-				sprintf(strVer, "%d", ver); //convert int to string
+				//int ver = atoi(version);
+				//ver++;
+				//char strVer[ver+1];	//updated version number
+				//sprintf(strVer, "%d", ver); //convert int to string
 				lseek(manifest, currentPos, SEEK_SET); //set to start
 				lseek(manifest, tracker-linesize, SEEK_SET);
 				write(manifest, "U ", 2);
-				write(manifest, strVer, strlen(strVer));
+				write(manifest, version, strlen(version));
 				write(manifest, " ", 1);
 				write(manifest, fileName, strlen(fileName));
 				write(manifest, " ", 1);
@@ -320,6 +320,21 @@ void removeFile(char* dirName, char* fileName){
 	rename(newFilename, manifestPath);
 }
 
+void checkout(char* projectName){
+	DIR* dir = opendir(projectName);
+	if (dir){	//directory exists
+		printf("project already exists\n");
+		exit(1);
+    	}
+	int sockfd = connectServer();
+	char *str = (char*)malloc(sizeof(char)*(strlen(projectName)+11));
+	str = strcpy(str, "checkout:");
+	str = strcat(str, projectName);
+	printf("str is %s\n", str);
+	write(sockfd, str, strlen(str));
+	close(sockfd);
+}
+
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
 		printf("Incorrect number of arguments");
@@ -356,5 +371,16 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		removeFile(argv[2],argv[3]);
+	}
+	else if (strcmp(argv[1], "checkout") == 0){
+		if (argc !=3){
+			printf("incorrect number of arguments for checkout");
+			exit(1);
+		}
+		//int newFile = creat("test2/testee.txt", O_APPEND | O_WRONLY | 0600);
+		//if (newFile == -1){
+			//printf("could not create file\n");
+		//}
+		checkout(argv[2]);
 	}
 }
