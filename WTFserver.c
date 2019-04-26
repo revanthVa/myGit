@@ -15,21 +15,54 @@
 
 typedef struct manifestData{
     int numberOfFiles;
-    struct fileData* file;
+    struct fileList* file;
 }manifestData;
 
 typedef struct fileList{	//linked list of file data
 	int length;
 	int size;
 	char* name;
-	struct fileData* next;
-}fileData;
+	char* data;
+	struct fileList* next;
+}fileList;
 
 manifestData* md = NULL;
+fileList* fl = NULL;
 
-void getFileData(char* file){
+void getFileData(char* fileName){
 	manifestData* mdPtr = md;
+	fileList* flPtr = fl;
+	while (flPtr->next != NULL){
+		flPtr = flPtr->next;
+	}
+	fileList* tmp = (fileList*)malloc(sizeof(fileList));
+	tmp->length = strlen(fileName);
+	tmp->name = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+	memcpy(tmp->name, fileName, strlen(fileName));
+	tmp->name[strlen(fileName)] = '\0';
+	//printf("tmp file length is %i\n", tmp->length);
+	//printf("tmp file name is %s\n", tmp->name);
+	int fileptr = open(fileName, O_RDONLY);
+	if(fileptr == -1){
+		printf("cannot open file\n");
+		exit(1);
+	}
+	int currentPos = lseek(fileptr, 0, SEEK_CUR);
+	int size = lseek(fileptr, 0, SEEK_END);    //get length of file
+	lseek(fileptr, currentPos, SEEK_SET); 	//set position back to start
+	tmp->size = size;
+	//printf("first file size is %i\n", tmp->size);
+	char c[size+1];
+	c[size] = '\0';
+	if(read(fileptr, c, size) != 0){
+		tmp->data = (char*)malloc(sizeof(char)*size+1);
+		strcpy(tmp->data, c);
+	}
+	printf("file has this data: \n%s", tmp->data);
+	close(fileptr);
+	flPtr->next = tmp;
 }
+
 void createManifestData(char* project){
 	char* path = (char*)malloc(sizeof(char)*(strlen(project)+12));
 	path = strcpy(path, project);
@@ -38,16 +71,32 @@ void createManifestData(char* project){
 	manifestFile = open(path, O_RDONLY);
 	if(manifestFile == -1){
 		printf("cannot open .Manifest\n");
+		exit(1);
 	}
 	md = (manifestData*)malloc(sizeof(manifestData));
+	fl = (fileList*)malloc(sizeof(fileList));
+	md->file = fl;
 	md->numberOfFiles = 1;
+	fl->length = strlen(path);
+	fl->name = (char*)malloc(sizeof(char)*strlen(path)+1);
+	memcpy(fl->name, path, strlen(path));
+	fl->name[strlen(path)] = '\0';
+	printf("manifest length is %i\n", md->file->length);
+	printf("manifest name is %s\n", md->file->name);
 	int currentPos = lseek(manifestFile, 0, SEEK_CUR);
 	int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
 	lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+	md->file->size = size;
+	printf("manifest size is %i\n", md->file->size);
+	
 	char c[size+1];
+	c[size] = '\0';
 	int tracker = 0;
 	int linesize = 0;
 	if(read(manifestFile, c, size) != 0){
+	md->file->data = (char*)malloc(sizeof(char)*size+1);
+	strcpy(md->file->data, c);
+	//printf("manifest has this data: %s\n", md->file->data);
 		while (tracker < size){
 			linesize = 0;
 			while (c[tracker] != '\n'){
@@ -61,7 +110,7 @@ void createManifestData(char* project){
 			char* line = (char*)malloc(sizeof(char)*linesize+1);
 			memcpy(line, &c[tracker-linesize], linesize);
 			line[strlen(line)] = '\0';
-			printf("line is %s\n", line);
+			//printf("line is %s\n", line);
 			int numPosition = tracker+2-linesize;
 			int numSize = 0;
 			while (c[numPosition] != ' '){	//gets length of version
@@ -75,7 +124,7 @@ void createManifestData(char* project){
 			char* version = (char*)malloc(sizeof(char)*(numSize+1));
 			version[strlen(version)] = '\0';
 			memcpy(version, &c[tracker+2-linesize], numSize);
-			printf("version is %s\n", version);
+			//printf("version is %s\n", version);
 			int fileNameSize = linesize-44-strlen(version)+1; //with null teminator
 			char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
 			memcpy(fileName, &c[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
