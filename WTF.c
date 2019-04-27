@@ -13,6 +13,9 @@
 #include <errno.h>
 #include <openssl/sha.h>
 #define MAX 80 
+
+//gcc -o WTF WTF.c -lssl -lcrypto
+
 void func(int sockfd) 
 { 
     char buff[MAX]; 
@@ -82,18 +85,18 @@ int connectServer(){ //gets ip and port from file and connects
 	//inet_ntop(AF_INET, &serverInfo.sin_addr, myIP, sizeof(myIP));
 	//printf("Local ip address: %s\n", myIP);
 	if (connect(sockfd,(struct sockaddr*)&serverInfo,sizeof(serverInfo)) != 0){
-		printf("connection failed\n");
+		printf("Connection to server failed.\n");
 		exit(1);
 	}
 	else
-		printf("connected to the server\n");
+		printf("Connection to server successful.....\n");
 		return sockfd;
 }
-void configure(char* ip, char* port){ //create file with IP and port of server
 
+void configure(char* ip, char* port){ //create file with IP and port of server
 		int conf;
 		conf = creat("configure", O_APPEND | O_WRONLY | 0600);
-		printf("yes");
+		printf("Configuring.....\n");
 		int len = strlen(ip) + strlen(port) + 3;
 		char *ip_port = (char*) malloc(len);
 		ip_port = strcpy(ip_port, ip);
@@ -101,17 +104,19 @@ void configure(char* ip, char* port){ //create file with IP and port of server
 		ip_port = strcat(ip_port, port);
 		ip_port = strcat(ip_port, "\n");
 		write(conf, ip_port, strlen(ip_port));
+		printf("Configure successful.\n");
 }
 
 void create(char* name){
-	char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
-	str = strcpy(str, "create;");
-	str = strcat(str, name);
-	//printf("str is %s\n", str);
-	int sockfd = connectServer();
-	write(sockfd, str, strlen(str)+1);
-	DIR* dir = opendir(name);
-	if (ENOENT == errno){ //directory doesn't exist
+    char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
+    str = strcpy(str, "create:");
+    str = strcat(str, name);
+    //printf("str is %s\n", str);
+    int sockfd = connectServer();
+    printf("Sending create command request to server.....\n");
+    write(sockfd, str, strlen(str)+1);
+    DIR* dir = opendir(name);
+    if (ENOENT == errno){ //directory doesn't exist
     	mkdir(name, 0700);
     	char* path = (char*)malloc(sizeof(char)*(strlen(name)+12));
     	path = strcpy(path, name);
@@ -119,8 +124,8 @@ void create(char* name){
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
-       		printf("cannot create .Manifest\n");
-   		}
+	    printf("cannot create .Manifest\n");
+   	}
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
@@ -133,8 +138,8 @@ void create(char* name){
 char* createDigest(char* fileName, char* digest){
 	int file = open(fileName, O_RDONLY);
 	if (file == -1){
-		printf("File does not exist\n");
-		exit(1);
+	    printf("File does not exist\n");
+	    exit(1);
 	}
 	int currentPos = lseek(file, 0, SEEK_CUR);
 	int size = lseek(file, 0, SEEK_END);    //get length of file
@@ -200,14 +205,14 @@ void checkAdd(char* fileName, char* dirName, char* digest){	//check if file is a
 				char* version = (char*)malloc(sizeof(char)*(numSize+1));
 				version[strlen(version)] = '\0';
 				memcpy(version, &c[tracker+2-linesize], numSize);
-				int ver = atoi(version);
-				ver++;
-				char strVer[ver+1];	//updated version number
-				sprintf(strVer, "%d", ver); //convert int to string
+				//int ver = atoi(version);
+				//ver++;
+				//char strVer[ver+1];	//updated version number
+				//sprintf(strVer, "%d", ver); //convert int to string
 				lseek(manifest, currentPos, SEEK_SET); //set to start
 				lseek(manifest, tracker-linesize, SEEK_SET);
 				write(manifest, "U ", 2);
-				write(manifest, strVer, strlen(strVer));
+				write(manifest, version, strlen(version));
 				write(manifest, " ", 1);
 				write(manifest, fileName, strlen(fileName));
 				write(manifest, " ", 1);
@@ -320,6 +325,22 @@ void removeFile(char* dirName, char* fileName){
 	rename(newFilename, manifestPath);
 }
 
+void checkout(char* projectName){
+	DIR* dir = opendir(projectName);
+	if (dir){	//directory exists
+		printf("project already exists\n");
+		exit(1);
+    	}
+	int sockfd = connectServer();
+	char *str = (char*)malloc(sizeof(char)*(strlen(projectName)+11));
+	str = strcpy(str, "checkout:");
+	str = strcat(str, projectName);
+	printf("str is %s\n", str);
+	printf("Sending checkout command request to server.....\n");
+	write(sockfd, str, strlen(str));
+	close(sockfd);
+}
+
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
 		printf("Incorrect number of arguments");
@@ -357,4 +378,16 @@ int main(int argc, char *argv[]){
 		}
 		removeFile(argv[2],argv[3]);
 	}
+	else if (strcmp(argv[1], "checkout") == 0){
+		if (argc !=3){
+			printf("incorrect number of arguments for checkout");
+			exit(1);
+		}
+		//int newFile = creat("test2/testee.txt", O_APPEND | O_WRONLY | 0600);
+		//if (newFile == -1){
+			//printf("could not create file\n");
+		//}
+		checkout(argv[2]);
+	}
+	printf("Client command completed.\n");
 }
