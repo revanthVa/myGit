@@ -15,6 +15,8 @@
 #include <sys/ioctl.h>
 #define MAX 80 
 
+//gcc -o WTF WTF.c -lssl -lcrypto
+
 void func(int sockfd) 
 { 
     char buff[MAX]; 
@@ -84,18 +86,18 @@ int connectServer(){ //gets ip and port from file and connects
 	//inet_ntop(AF_INET, &serverInfo.sin_addr, myIP, sizeof(myIP));
 	//printf("Local ip address: %s\n", myIP);
 	if (connect(sockfd,(struct sockaddr*)&serverInfo,sizeof(serverInfo)) != 0){
-		printf("connection failed\n");
+		printf("Connection to server failed.\n");
 		exit(1);
 	}
 	else
-		printf("connected to the server\n");
+		printf("Connection to server successful.....\n");
 		return sockfd;
 }
-void configure(char* ip, char* port){ //create file with IP and port of server
 
+void configure(char* ip, char* port){ //create file with IP and port of server
 		int conf;
 		conf = creat("configure", O_APPEND | O_WRONLY | 0600);
-		printf("yes");
+		printf("Configuring.....\n");
 		int len = strlen(ip) + strlen(port) + 3;
 		char *ip_port = (char*) malloc(len);
 		ip_port = strcpy(ip_port, ip);
@@ -103,17 +105,19 @@ void configure(char* ip, char* port){ //create file with IP and port of server
 		ip_port = strcat(ip_port, port);
 		ip_port = strcat(ip_port, "\n");
 		write(conf, ip_port, strlen(ip_port));
+		printf("Configure successful.\n");
 }
 
 void create(char* name){
-	char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
-	str = strcpy(str, "create:");
-	str = strcat(str, name);
-	//printf("str is %s\n", str);
-	int sockfd = connectServer();
-	write(sockfd, str, strlen(str)+1);
-	DIR* dir = opendir(name);
-	if (ENOENT == errno){ //directory doesn't exist
+    char *str = (char*)malloc(sizeof(char)*(strlen(name)+9));
+    str = strcpy(str, "create:");
+    str = strcat(str, name);
+    //printf("str is %s\n", str);
+    int sockfd = connectServer();
+    printf("Sending create command request to server.....\n");
+    write(sockfd, str, strlen(str)+1);
+    DIR* dir = opendir(name);
+    if (ENOENT == errno){ //directory doesn't exist
     	mkdir(name, 0700);
     	char* path = (char*)malloc(sizeof(char)*(strlen(name)+12));
     	path = strcpy(path, name);
@@ -121,8 +125,8 @@ void create(char* name){
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
-       		printf("cannot create .Manifest\n");
-   		}
+	    printf("cannot create .Manifest\n");
+   	}
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
@@ -135,8 +139,8 @@ void create(char* name){
 char* createDigest(char* fileName, char* digest){
 	int file = open(fileName, O_RDONLY);
 	if (file == -1){
-		printf("File does not exist\n");
-		exit(1);
+	    printf("File does not exist\n");
+	    exit(1);
 	}
 	int currentPos = lseek(file, 0, SEEK_CUR);
 	int size = lseek(file, 0, SEEK_END);    //get length of file
@@ -333,6 +337,7 @@ void checkout(char* projectName){
 	str = strcpy(str, "checkout:");
 	str = strcat(str, projectName);
 	printf("str is %s\n", str);
+	printf("Sending checkout command request to server.....\n");
 	write(sockfd, str, strlen(str));
 	//read(sockfd, buff, 339);
 	int len = 0;
@@ -410,4 +415,5 @@ int main(int argc, char *argv[]){
 		//}
 		checkout(argv[2]);
 	}
+	printf("Client command completed.\n");
 }
