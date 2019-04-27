@@ -12,7 +12,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <openssl/sha.h>
+#include <sys/ioctl.h>
 #define MAX 80 
+
 void func(int sockfd) 
 { 
     char buff[MAX]; 
@@ -332,6 +334,31 @@ void checkout(char* projectName){
 	str = strcat(str, projectName);
 	printf("str is %s\n", str);
 	write(sockfd, str, strlen(str));
+	//read(sockfd, buff, 339);
+	int len = 0;
+	int totalSize = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    }
+    char buff[len]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		totalSize += len;
+	}
+	//printf("totalSize is %i\n", totalSize);
+	char* createTar = (char*)malloc(sizeof(char)*strlen(projectName)+5);
+	strcpy(createTar, projectName);
+	strcat(createTar, ".tgz");
+	int newFile = creat(createTar, O_APPEND | O_RDWR | 0600);
+	char* untar = (char*)malloc(sizeof(char)*strlen(createTar)+11);
+	strcpy(untar, "tar -xvf ");
+	strcat(untar, createTar);
+	write(newFile, buff, len);
+	system(untar);
+	remove(createTar);
+	//printf("From Server : %s", buff); 
+	printf("completed checkout\n");
+	
 	close(sockfd);
 }
 

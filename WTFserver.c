@@ -164,15 +164,56 @@ void create(char* token){
     }
 }
 
-void checkout(char* token){
-    printf("token is %s\n", token);
+void checkout(char* token, int sockfd){
+    //printf("token is %s\n", token);
     token = strtok(NULL, " "); 
     printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
     	printf("Project exists\n");
-    }
-    else if (ENOENT == errno)	//directory doesn't exist
+    	char* systemStr = (char*)malloc(sizeof(char)*14+(strlen(token)*2+2));
+    	strcpy(systemStr, "tar cfz ");
+    	strcat(systemStr, token);
+    	strcat(systemStr, ".tgz ");
+    	strcat(systemStr, token);
+    	system(systemStr);
+    	char* tarFile = (char*)malloc(sizeof(char)*(strlen(token)+5));
+    	strcpy(tarFile, token);
+    	strcat(tarFile, ".tgz");
+    	tarFile[strlen(token)+4] = '\0';
+    	printf("tarFile is %s\n", tarFile);
+    	int fileptr = open(tarFile, O_RDONLY);
+		if(fileptr == -1){
+			printf("cannot open .Manifest\n");
+			exit(1);
+		}
+		int currentPos = lseek(fileptr, 0, SEEK_CUR);
+		int size = lseek(fileptr, 0, SEEK_END);    //get length of file
+		lseek(fileptr, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		printf("size is %i\n", size);
+		int tracker = 0;
+		int linesize = 0;
+		int new = 0;
+		//new = creat("work.tgz", O_APPEND | O_RDWR | 0600);
+		if(read(fileptr, c, size) != 0){
+			//while (tracker < size){
+				//printf("%c", c[tracker]);
+				//tracker++;
+			//}
+			char sendtar[size+1];
+			memcpy(sendtar, c, size);
+			sendtar[size] = '\0';
+			char sendSize[40];
+			sprintf(sendSize, "%d", size);
+			//write(sockfd, sendSize, strlen(sendSize));
+			//printf("send tar is this \n%s", sendtar);
+			//new = creat("work.tgz", O_APPEND | O_RDWR | 0600);
+			write(sockfd, sendtar, size);
+			remove(tarFile);
+    	}
+    }else if (ENOENT == errno)	//directory doesn't exist
     {
         printf("Project does not exist\n");
         exit(1);
@@ -196,7 +237,7 @@ void *func(void* vptr_sockfd){
 	    }
         else if (strcmp(token, "checkout") == 0){
             printf("checkout\n");
-            checkout(token);
+            checkout(token, sockfd);
         }
         bzero(buff, MAX); 
         n = 0; 
@@ -211,8 +252,9 @@ void *func(void* vptr_sockfd){
 // Driver function 
 int main(int argc, char *argv[]) 
 { 
-    createManifestData("test");
-    /*
+	//checkout("test");
+    //createManifestData("test");
+
     if (argc!= 2){
         printf("Incorrect number of arguments. Enter a port number\n");
         exit(1);
@@ -290,5 +332,4 @@ int main(int argc, char *argv[])
 
     // After chatting close the socket 
     close(sockfd); 
-    */
 } 
