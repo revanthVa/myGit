@@ -74,7 +74,7 @@ int connectServer(){ //gets ip and port from file and connects
 				ip_word = (char*)malloc(sizeof(char)*(tracker+1));
 				memcpy(ip_word, &c[0], tracker);
 				ip_word[tracker] = '\0';
-				printf("ip word is: %s\n", ip_word);
+				//printf("ip word is: %s\n", ip_word);
 				port_word = (char*)malloc(sizeof(char)*(size-tracker-1));
 				memcpy(port_word, &c[tracker+1], size-tracker-2);
 				port_word[strlen(port_word)] = '\0';
@@ -591,7 +591,7 @@ void getServerManifestData(char* projectName){
 	char* message = (char*)malloc(sizeof(char)*strlen(projectName+9));
 	strcpy(message, "update:");
 	strcat(message, projectName);
-	printf("message is %s\n", message);
+	//printf("message is %s\n", message);
 	write(sockfd, message, strlen(message)+1);
 	int len = 0;
 	int size = 0;
@@ -696,7 +696,7 @@ void printManifestData(){
 	}
 	printf("\n");
 }
-void upload(){	
+void updateUpload(int updateFile){	
 	manifestData* mdClientPtr = clientmd;
 	manifestData* mdServerPtr = servermd;
 	manifestData* mdLivePtr = livemd;
@@ -710,6 +710,11 @@ void upload(){
 		}
 		if (mdServerPtr == NULL){
 			printf("U %s\n", mdClientPtr->fileName);
+			char* writeStr = (char*)malloc(sizeof(char)*strlen(mdClientPtr->fileName)+5);
+			strcpy(writeStr, "U ");
+			strcat(writeStr, mdClientPtr->fileName);
+			strcat(writeStr, "\n");
+			write(updateFile, writeStr, strlen(writeStr));
 		}
 		mdClientPtr = mdClientPtr->next;
 	}
@@ -717,13 +722,20 @@ void upload(){
 	mdClientPtr = clientmd;
 	mdServerPtr = servermd;
 	mdLivePtr = livemd;
-	while(mdLivePtr != NULL){	//server and client both have but and live hash are different
+	while(mdLivePtr != NULL){	//server and client both have but server and live hash are different
 		mdServerPtr = servermd;
 		//printf("server fileName1 is %s\n", mdServerPtr->fileName);
 		while(mdServerPtr != NULL){
 			if (strcmp(mdLivePtr->fileName, mdServerPtr->fileName) == 0){
 				if (strcmp(mdLivePtr->hash, mdServerPtr->hash) != 0){
 					printf("U %s\n", mdLivePtr->fileName);
+					char* writeStr = (char*)malloc(sizeof(char)*strlen(mdLivePtr->fileName)+5);
+					strcpy(writeStr, "U ");
+					strcat(writeStr, mdLivePtr->fileName);
+					strcat(writeStr, "\n");
+					write(updateFile, writeStr, strlen(writeStr));
+					free(writeStr);
+					break;
 				}
 			}
 			mdServerPtr = mdServerPtr->next;
@@ -732,14 +744,155 @@ void upload(){
 	}
 	
 }
-void modify(){	//file both server and client have, but file version different and the clients live hash is same as its manifest
 
+void updateModify(int updateFile){	//file both server and client have, but file version different and the clients live hash is same as its manifest
+// or file both server and client have, but file version same and hash different
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	
+	while (mdClientPtr != NULL){
+		mdServerPtr = servermd;
+		while (mdServerPtr !=NULL){
+			if (strcmp(mdClientPtr->fileName, mdServerPtr->fileName) == 0){
+				if (mdClientPtr->version != mdServerPtr->version){
+					//printf("file version different \n");
+					mdLivePtr = livemd;
+					while(mdLivePtr != NULL && (strcmp(mdLivePtr->fileName, mdClientPtr->fileName) != 0)){
+						mdLivePtr = mdLivePtr->next;
+					}
+					if (mdLivePtr == NULL){
+						break;
+					}
+					if (strcmp(mdLivePtr->fileName, mdClientPtr->fileName) == 0){
+						if (strcmp(mdLivePtr->hash, mdClientPtr->hash) == 0){
+							printf("M %s\n", mdClientPtr->fileName);
+							char* writeStr = (char*)malloc(sizeof(char)*strlen(mdClientPtr->fileName)+5);
+							strcpy(writeStr, "M ");
+							strcat(writeStr, mdClientPtr->fileName);
+							strcat(writeStr, "\n");
+							write(updateFile, writeStr, strlen(writeStr));
+							free(writeStr);
+						}
+					}
+				}
+				else if (mdClientPtr->version == mdServerPtr->version){
+					mdLivePtr = livemd;
+					while(mdLivePtr != NULL && (strcmp(mdLivePtr->fileName, mdClientPtr->fileName) != 0)){
+						mdLivePtr = mdLivePtr->next;
+					}
+					if (mdLivePtr == NULL){
+						break;
+					}
+					if (strcmp(mdLivePtr->fileName, mdClientPtr->fileName) == 0){
+						if (strcmp(mdLivePtr->hash, mdClientPtr->hash) != 0){
+							printf("M %s\n", mdClientPtr->fileName);
+							char* writeStr = (char*)malloc(sizeof(char)*strlen(mdClientPtr->fileName)+5);
+							strcpy(writeStr, "M ");
+							strcat(writeStr, mdClientPtr->fileName);
+							strcat(writeStr, "\n");
+							write(updateFile, writeStr, strlen(writeStr));
+							free(writeStr);
+						}
+					}
+				}
+			}
+			mdServerPtr = mdServerPtr->next;
+		}
+		mdClientPtr = mdClientPtr->next;
+	}
 }
+
+void updateAdd(int updateFile){	//file in servers manifest but not in clients
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	
+	while(mdServerPtr != NULL){	
+		mdClientPtr = clientmd;
+		while (mdClientPtr != NULL){
+			if (strcmp(mdClientPtr->fileName, mdServerPtr->fileName) == 0){
+				break;
+			}
+			mdClientPtr = mdClientPtr->next;
+		}
+		if (mdClientPtr == NULL){
+			printf("A %s\n", mdServerPtr->fileName);
+			char* writeStr = (char*)malloc(sizeof(char)*strlen(mdServerPtr->fileName)+5);
+			strcpy(writeStr, "A ");
+			strcat(writeStr, mdServerPtr->fileName);
+			strcat(writeStr, "\n");
+			write(updateFile, writeStr, strlen(writeStr));
+			free(writeStr);
+		}
+		mdServerPtr = mdServerPtr->next;
+	}
+}
+
+void updateDelete(int updateFile){
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	
+	while(mdClientPtr !=NULL){	//file in clients manifest but not servers
+		mdServerPtr = servermd;
+		while (mdServerPtr != NULL){
+			if (strcmp(mdClientPtr->fileName, mdServerPtr->fileName) == 0){
+				break;
+			}
+			mdServerPtr = mdServerPtr->next;
+		}
+		if (mdServerPtr == NULL){
+			printf("D %s\n", mdClientPtr->fileName);
+			char* writeStr = (char*)malloc(sizeof(char)*strlen(mdClientPtr->fileName)+5);
+			strcpy(writeStr, "D ");
+			strcat(writeStr, mdClientPtr->fileName);
+			strcat(writeStr, "\n");
+			write(updateFile, writeStr, strlen(writeStr));
+			free(writeStr);
+		}
+		mdClientPtr = mdClientPtr->next;
+	}
+}
+
+int updateConflicts(){	//manifest different, file version different and client live hash different
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	int conflictPresent = 0;
+	while (mdClientPtr != NULL){
+		mdServerPtr = servermd;
+		while (mdServerPtr !=NULL){
+			if (strcmp(mdClientPtr->fileName, mdServerPtr->fileName) == 0){
+				if (mdClientPtr->version != mdServerPtr->version){
+					//printf("file version different \n");
+					mdLivePtr = livemd;
+					while(mdLivePtr != NULL && (strcmp(mdLivePtr->fileName, mdClientPtr->fileName) != 0)){
+						mdLivePtr = mdLivePtr->next;
+					}
+					if (mdLivePtr == NULL){
+						break;
+					}
+					if (strcmp(mdLivePtr->fileName, mdClientPtr->fileName) == 0){
+						if (strcmp(mdLivePtr->hash, mdClientPtr->hash) != 0){
+							printf("Conflict %s\n", mdClientPtr->fileName);
+							conflictPresent = 1;
+						}
+					}
+				}
+			}
+			mdServerPtr = mdServerPtr->next;
+		}
+		mdClientPtr = mdClientPtr->next;
+	}
+	return conflictPresent;
+}
+
 void update(char* projectName){
 	getServerManifestData(projectName);
 	getClientManifestData(projectName);
 	getLiveManifestData(projectName);
-	printManifestData();
+	//printManifestData();
 	
 	manifestData* mdClientPtr = clientmd;
 	manifestData* mdServerPtr = servermd;
@@ -753,12 +906,31 @@ void update(char* projectName){
 		printf("could not get server manifest version\n");
 		exit(1);
 	}
+	char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
+   	path = strcpy(path, projectName);
+    path = strcat(path, "/.update");
+	int updateFile = creat(path, O_APPEND | O_RDWR | 0600);
+	if (clientVersion != serverVersion){
+		int conflictPresent = updateConflicts();
+		if (conflictPresent == 1){
+			printf("Please resolve the conflicts before updating\n");
+			exit(1);
+		}
+	}
+	
 	if (clientVersion == serverVersion){
-		upload();
+		updateUpload(updateFile);
 	}
 	else{
-		modify();
+		updateModify(updateFile);
+		updateAdd(updateFile);
+		updateDelete(updateFile);
 	}
+	int size = lseek(updateFile, 0, SEEK_END);
+	if(size == 0){
+		printf("Up to date\n");
+	}
+	close(updateFile);
 }
 
 int main(int argc, char *argv[]){
