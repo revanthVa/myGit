@@ -16,6 +16,20 @@
 #define MAX 80 
 
 //gcc -o WTF WTF.c -lssl -lcrypto
+typedef struct manifestData{
+	char* fileName;
+	char* hash;
+	char flag[2]; // U M A D
+	int version;
+	struct manifestData* next;
+}manifestData;
+
+manifestData* servermd = NULL;
+manifestData* clientmd = NULL;
+manifestData* livemd = NULL;
+
+int serverVersion = -1;
+int clientVersion = -1;
 
 void func(int sockfd) 
 { 
@@ -150,7 +164,7 @@ char* createDigest(char* fileName, char* digest){
 	unsigned char hash[20];
 	SHA1(buffer, sizeof(buffer)-1, hash);
 	//digest[SHA_DIGEST_LENGTH*2];
-	digest = (char*)malloc(sizeof(char)*(SHA_DIGEST_LENGTH*2));
+	//digest = (char*)malloc(sizeof(char)*(SHA_DIGEST_LENGTH*2));
 	int i;
 	for (i=0; i < SHA_DIGEST_LENGTH; i++) {
     	sprintf((char*)&(digest[i*2]), "%02x", hash[i]);
@@ -248,7 +262,8 @@ void add(char* dirName, char* fileName){
 		printf("%s doesn't exist\n", fileName);
 		exit(1);
 	}
-	char* digest;
+	char* digest = (char*)malloc(sizeof(char)*41);
+	digest[41] = '\0';
 	digest = createDigest(fileName, digest);
 	//printf("digest %s\n", digest);
     char *writeStr = (char*)malloc(sizeof(char)*(sizeof(digest)+(strlen(fileName)+8)));
@@ -367,6 +382,385 @@ void checkout(char* projectName){
 	close(sockfd);
 }
 
+void addManifestData(char* fileName, char* hash, int version, int clientOrServer){ //adds to manifestData struct. 0 is client 1 is server.
+	//manifestData* mdPtr = mdclient;
+	if (clientOrServer == 0){
+		if (clientmd == NULL){
+			clientmd = (manifestData*)malloc(sizeof(manifestData));
+			clientmd->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+			strcpy(clientmd->fileName, fileName);
+			clientmd->hash = (char*)malloc(sizeof(char)*41);
+			strcpy(clientmd->hash, hash);
+			clientmd->version = version;
+			clientmd->next == NULL;
+			//printf("client fileName %s\n", clientmd->fileName);
+			//printf("client hash %s\n", clientmd->hash);
+			//printf("client version %i\n", clientmd->version);
+		}
+		else{
+			manifestData* mdptr = clientmd;
+			while (mdptr->next != NULL){
+				mdptr = mdptr->next;
+			}
+			manifestData* tmp = (manifestData*)malloc(sizeof(manifestData));
+			tmp->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+			strcpy(tmp->fileName, fileName);
+			tmp ->hash = (char*)malloc(sizeof(char)*41);
+			strcpy(tmp->hash, hash);
+			tmp->version = version;
+			tmp->next = NULL;
+			mdptr->next = tmp;
+		}
+	}
+	else if (clientOrServer == 1){
+		if (servermd == NULL){
+			servermd = (manifestData*)malloc(sizeof(manifestData));
+			servermd->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+			strcpy(servermd->fileName, fileName);
+			servermd->hash = (char*)malloc(sizeof(char)*41);
+			strcpy(servermd->hash, hash);
+			servermd->version = version;
+			servermd->next = NULL;
+			//printf("server fileName %s\n", servermd->fileName);
+			//printf("server hash %s\n", servermd->hash);
+			//printf("server version %i\n", servermd->version);
+		}
+		else{
+			manifestData* mdptr = servermd;
+			while (mdptr->next != NULL){
+				mdptr = mdptr->next;
+			}
+			manifestData* tmp = (manifestData*)malloc(sizeof(manifestData));
+			tmp->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+			strcpy(tmp->fileName, fileName);
+			tmp ->hash = (char*)malloc(sizeof(char)*41);
+			strcpy(tmp->hash, hash);
+			tmp->version = version;
+			tmp->next = NULL;
+			mdptr->next = tmp;
+			//printf("s fileName %s\n", mdptr->next->fileName);
+			//printf("s hash %s\n", mdptr->next->hash);
+			//printf("s version %i\n", mdptr->next->version);
+		}
+	}
+}
+
+void addLiveManifestData(char* fileName, char* hash){
+	manifestData* mdliveptr = livemd;
+	if (livemd == NULL){
+		livemd = (manifestData*)malloc(sizeof(manifestData));
+		livemd->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+		strcpy(livemd->fileName, fileName);
+		livemd->hash = (char*)malloc(sizeof(char)*41);
+		strcpy(livemd->hash, hash);
+		livemd->next = NULL;
+		//printf("1st livemd fileName %s\n", livemd->fileName);
+		//printf("1st livemd hash %s\n", livemd->hash);
+	}
+	else{
+		while (mdliveptr->next != NULL){
+			mdliveptr = mdliveptr->next;
+		}
+		manifestData* tmp = (manifestData*)malloc(sizeof(manifestData));
+		tmp->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+		strcpy(tmp->fileName, fileName);
+		tmp->hash = (char*)malloc(sizeof(char)*41);
+		strcpy(tmp->hash, hash);
+		tmp->next = NULL;
+		mdliveptr->next = tmp;
+		//printf("tmp fileName %s\n", mdliveptr->next->fileName);
+		//printf("tmp hash %s\n", mdliveptr->next->hash);
+	}
+}
+
+void getLiveManifestData(char* pathorfile){	//goes through all subdirectories and finds files and gets the hashes for the files.
+   //printf("Current path: %s\n", pathorfile);
+   struct dirent *pDirent;
+   DIR *pDir;
+   pDir = opendir(pathorfile);
+   if(pDir == NULL){
+   	printf("Cannot open directory '%s'\n", pathorfile);
+   	return;
+   }
+   while ((pDirent = readdir(pDir)) != NULL) {
+   	char* nextpathorfile = (char*)malloc(sizeof(char)*(strlen(pDirent->d_name)));
+   	strcpy(nextpathorfile,pDirent->d_name);
+   	int newsize = strlen(pathorfile) + strlen(nextpathorfile) + 1;
+   	char *new = (char*)malloc(sizeof(char)*(newsize));
+   	strcpy(new, pathorfile);
+   	if(new[strlen(new)-1] != '/'){
+       	strcat(new, "/");
+   	}
+   	strcat(new, nextpathorfile);
+   	if(strcmp(nextpathorfile, ".") == 0 || strcmp(nextpathorfile, "..") == 0){
+       	continue;
+   	}
+   	struct stat path_stat;
+   	stat(new, &path_stat);
+   	if(S_ISDIR(path_stat.st_mode)){ //is a directory
+       	//printf("Directory: %s\n", new);
+       	getLiveManifestData(new);
+   	}
+   	else if(S_ISREG(path_stat.st_mode)){ //is a file
+       	//printf("File: %s\n", new);
+       	char* digest = (char*)malloc(sizeof(char)*41);
+       	digest[41] = '\0';
+       	createDigest(new, digest);
+       	addLiveManifestData(new, digest);
+       	free(digest);
+       	}
+   	
+   }
+   closedir(pDir);
+}
+
+void getClientManifestData(char* projectName){
+	char* manifestPath = (char*)malloc(sizeof(char)*(strlen(projectName)+12));
+	manifestPath = strcpy(manifestPath, projectName);
+	manifestPath = strcat(manifestPath, "/.Manifest");
+	int manifestFile = open(manifestPath, O_RDWR);
+	if (manifestFile == -1){
+		printf("client manifest doesn't exist\n");
+		exit(1);
+	}
+	int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+	int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+	lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+	char c[size+1];
+	int tracker = 0;
+	int linesize = 0;
+	int firstline = 0;
+	if(read(manifestFile, c, size) != 0){
+		while (tracker < size){
+			linesize = 0;
+			while (c[tracker] != '\n'){
+				tracker++;
+				linesize++;
+			}
+			if (linesize <2){ //skips first line
+				if (firstline == 0){
+					char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
+					memcpy(totalVersion, &c[tracker-linesize], linesize);
+					totalVersion[linesize] = '\0';
+					clientVersion = atoi(totalVersion);
+					//printf("totalVersion is %i\n", clientVersion);
+					firstline++;
+				}
+				tracker++;
+				continue;	//line doces not have contain a filename
+			}
+			char* line = (char*)malloc(sizeof(char)*linesize+1);
+			memcpy(line, &c[tracker-linesize], linesize);
+			line[linesize] = '\0';
+			//printf("line is %s\n", line);
+			int numPosition = tracker+2-linesize;
+			int numSize = 0;
+			while (c[numPosition] != ' '){	//gets length of version
+				numPosition++;
+				numSize++;
+				if (numSize > 500){
+					printf("error\n");
+					exit(1);
+				}
+			}
+			char* version = (char*)malloc(sizeof(char)*(numSize+1));
+			memcpy(version, &c[tracker+2-linesize], numSize);
+			version[numSize] = '\0';
+			int ver = atoi(version);
+			int fileNameSize = linesize-44-strlen(version)+1; //with null teminator
+			//printf("linesize is %i\n", linesize);
+			//printf("fileNamesize is %i\n", fileNameSize);
+			char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
+			memcpy(fileName, &c[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
+			fileName[fileNameSize-1] = '\0';
+			char* hash = (char*)malloc(sizeof(char)*41);
+			memcpy(hash, &c[tracker-linesize+strlen(version)+strlen(fileName)+4], 40);
+			hash[41] = '\0';
+			//printf("fileName is %s\n", fileName);
+			//printf("hash is %s\n", hash);
+			addManifestData(fileName, hash, ver, 0);
+			free(fileName);
+			free(hash);
+		}
+	}
+	close(manifestFile);
+}
+
+void getServerManifestData(char* projectName){
+	int sockfd = connectServer();
+	char* message = (char*)malloc(sizeof(char)*strlen(projectName+9));
+	strcpy(message, "update:");
+	strcat(message, projectName);
+	printf("message is %s\n", message);
+	write(sockfd, message, strlen(message)+1);
+	int len = 0;
+	int size = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    }
+    char buff[len+1]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		size += len;
+	}
+	//printf("size is %i\n", size);
+	if (strcmp(buff, "exit") == 0){
+		printf("Error retrieving .Manifest from server\n");
+		exit(1);
+	}
+	int tracker = 0;
+	int linesize = 0;
+	int firstline = 0;
+	while (tracker < size){
+		linesize = 0;
+		while (buff[tracker] != '\n' && buff[tracker] != '\0'){
+			tracker++;
+			linesize++;
+		}
+		if (linesize <2){ //skips first line
+			if (firstline == 0){	//gets version of manifest on first line
+				char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
+				memcpy(totalVersion, &buff[tracker-linesize], linesize);
+				totalVersion[linesize] = '\0';
+				serverVersion = atoi(totalVersion);
+				//printf("totalVersion is %i\n", clientVersion);
+				firstline++;
+			}
+			tracker++;
+			continue;	//line doces not have contain a filename
+		}
+		char* line = (char*)malloc(sizeof(char)*linesize+1);
+		memcpy(line, &buff[tracker-linesize], linesize);
+		line[linesize] = '\0';
+		//printf("line is %s\n", line);
+		int numPosition = tracker+2-linesize;
+		int numSize = 0;
+		while (buff[numPosition] != ' '){	//gets length of version
+			numPosition++;
+			numSize++;
+			if (numSize > 500){
+				printf("error\n");
+				exit(1);
+			}
+		}
+		char* version = (char*)malloc(sizeof(char)*(numSize+1));
+		memcpy(version, &buff[tracker+2-linesize], numSize);
+		version[numSize] = '\0';
+		int ver = atoi(version);
+		int fileNameSize = linesize-44-strlen(version)+1; //with null teminator
+		//printf("linesize is %i\n", linesize);
+		//printf("fileNamesize is %i\n", fileNameSize);
+		char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
+		memcpy(fileName, &buff[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
+		fileName[fileNameSize-1] = '\0';
+		char* hash = (char*)malloc(sizeof(char)*41);
+		memcpy(hash, &buff[tracker-linesize+strlen(version)+strlen(fileName)+4], 40);
+		hash[41] = '\0';
+		//printf("version is %s\n", version);
+		//printf("fileName is %s\n", fileName);
+		//printf("hash is %s\n", hash);
+		addManifestData(fileName, hash, ver, 1);
+		free(fileName);
+		free(hash);
+		free(version);
+	}
+	
+}
+
+void printManifestData(){
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	
+	printf("client manifest data and version is %i\n", clientVersion);
+	while (mdClientPtr != NULL){
+		printf("fileName is %s\n", mdClientPtr->fileName);
+		printf("hash is %s\n", mdClientPtr->hash);
+		printf("version is %i\n", mdClientPtr->version);
+		mdClientPtr = mdClientPtr->next;
+	}
+	printf("\n");
+	printf("server manifest data and version is %i\n", serverVersion);
+	while (mdServerPtr != NULL){
+		printf("fileName is %s\n", mdServerPtr ->fileName);
+		printf("hash is %s\n", mdServerPtr ->hash);
+		printf("version is %i\n", mdServerPtr ->version);
+		mdServerPtr = mdServerPtr ->next;
+	}
+	printf("\n");
+	printf("live manifest data is\n");
+	while (mdLivePtr != NULL){
+		printf("fileName is %s\n", mdLivePtr->fileName);
+		printf("hash is %s\n", mdLivePtr->hash);
+		mdLivePtr = mdLivePtr->next;
+	}
+	printf("\n");
+}
+void upload(){	
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	while(mdClientPtr !=NULL){	//file in clients manifest but not servers
+		mdServerPtr = servermd;
+		while (mdServerPtr != NULL){
+			if (strcmp(mdClientPtr->fileName, mdServerPtr->fileName) == 0){
+				break;
+			}
+			mdServerPtr = mdServerPtr->next;
+		}
+		if (mdServerPtr == NULL){
+			printf("U %s\n", mdClientPtr->fileName);
+		}
+		mdClientPtr = mdClientPtr->next;
+	}
+	
+	mdClientPtr = clientmd;
+	mdServerPtr = servermd;
+	mdLivePtr = livemd;
+	while(mdLivePtr != NULL){	//server and client both have but and live hash are different
+		mdServerPtr = servermd;
+		//printf("server fileName1 is %s\n", mdServerPtr->fileName);
+		while(mdServerPtr != NULL){
+			if (strcmp(mdLivePtr->fileName, mdServerPtr->fileName) == 0){
+				if (strcmp(mdLivePtr->hash, mdServerPtr->hash) != 0){
+					printf("U %s\n", mdLivePtr->fileName);
+				}
+			}
+			mdServerPtr = mdServerPtr->next;
+		}
+		mdLivePtr = mdLivePtr->next;
+	}
+	
+}
+void modify(){	//file both server and client have, but file version different and the clients live hash is same as its manifest
+
+}
+void update(char* projectName){
+	getServerManifestData(projectName);
+	getClientManifestData(projectName);
+	getLiveManifestData(projectName);
+	printManifestData();
+	
+	manifestData* mdClientPtr = clientmd;
+	manifestData* mdServerPtr = servermd;
+	manifestData* mdLivePtr = livemd;
+	
+	if (clientVersion == -1){
+		printf("could not get client manifest version\n");
+		exit(1);
+	}
+	if (serverVersion == -1){
+		printf("could not get server manifest version\n");
+		exit(1);
+	}
+	if (clientVersion == serverVersion){
+		upload();
+	}
+	else{
+		modify();
+	}
+}
+
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
 		printf("Incorrect number of arguments");
@@ -406,14 +800,17 @@ int main(int argc, char *argv[]){
 	}
 	else if (strcmp(argv[1], "checkout") == 0){
 		if (argc !=3){
-			printf("incorrect number of arguments for checkout");
+			printf("Incorrect number of arguments for checkout\n");
 			exit(1);
 		}
-		//int newFile = creat("test2/testee.txt", O_APPEND | O_WRONLY | 0600);
-		//if (newFile == -1){
-			//printf("could not create file\n");
-		//}
 		checkout(argv[2]);
 	}
+	else if (strcmp(argv[1], "update") == 0){
+		if (argc != 3){
+			printf("Incorrect number of arguments for update\n");
+			exit(1);
+		}
+		update(argv[2]);
 	printf("Client command completed.\n");
+	}
 }

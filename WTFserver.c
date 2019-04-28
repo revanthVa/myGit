@@ -223,6 +223,41 @@ void checkout(char* token, int sockfd){
     }
 }
 
+void update(char* token, int sockfd){	//send manifest to client
+	token = strtok(NULL, " "); 
+	printf("name: %s\n", token);
+    DIR* dir = opendir(token);
+    if (dir){	//directory exists
+    	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+		strcpy(path, token);
+		strcat(path, "/.Manifest");
+		int manifestFile;
+		manifestFile = open(path, O_RDONLY);
+		if(manifestFile == -1){
+			printf("cannot open .Manifest\n");
+			exit(1);
+		}
+		int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+		int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+		lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		printf("size is %i\n", size);
+		int tracker = 0;
+		int linesize = 0;
+		if(read(manifestFile, c, size) != 0){
+			printf("reading manifest\n");
+			write(sockfd, c, size);
+		}
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+        printf("Project does not exist. Update failed.\n");
+        write(sockfd, "exit", 5);
+        close(sockfd);
+        exit(1);
+    }
+}
 // Function designed for chat between client and server. 
 void *func(void* vptr_sockfd){ 
     int sockfd = *((int *) vptr_sockfd);
@@ -235,13 +270,22 @@ void *func(void* vptr_sockfd){
     // print buffer which contains the client contents 
     printf("From client: %s\t To client: ", buff);
     char* token = strtok(buff, ":");
+    printf("token is %s\n", token);
     if (strcmp(token, "create") == 0){
-      printf("Performing create command....\n");
-      create(token);
+    	printf("Performing create command....\n");
+    	create(token);
     }
     else if (strcmp(token, "checkout") == 0){
-      printf("Performing checkout command....\n");
-      checkout(token);
+    	printf("Performing checkout command....\n");
+    	checkout(token, sockfd);
+    }
+    else if (strcmp(token, "update") ==0){
+    	printf("performing update command....\n");
+    	update(token, sockfd);
+    }
+    else{
+    	printf("do nothing\n");
+    	exit(1);
     }
     bzero(buff, MAX); 
     n = 0; 
