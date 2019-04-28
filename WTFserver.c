@@ -1,8 +1,9 @@
-#include <netdb.h> 
-#include <netinet/in.h> 
+#include <netdb.h>
+#include <netinet/in.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h> 
-#include <string.h> 
+#include <string.h>
 #include <sys/socket.h> 
 #include <sys/types.h> 
 #include <dirent.h>
@@ -10,8 +11,9 @@
 #include <sys/stat.h> 
 #include <fcntl.h>
 #define MAX 80 
-#define PORT 8726
 #define SA struct sockaddr 
+
+//gcc WTFserver.c -lpthread -o WTFserver
 
 typedef struct manifestData{
     int numberOfFiles;
@@ -137,82 +139,229 @@ void createManifestData(char* project){
 	close(manifestFile);
 }
 
+void DeleteAll(char* pathorfile){ //implements recursive function to delete all files and subdirectories of server folder
+   printf("Current path: %s\n", pathorfile);
+   struct dirent *pDirent;
+   DIR *pDir;
+   pDir = opendir(pathorfile);
+   if(pDir == NULL){
+       printf("Cannot open directory '%s'\n", pathorfile);
+       return;
+   }
+   while ((pDirent = readdir(pDir)) != NULL) {
+       char* nextpathorfile = (char*)malloc(sizeof(char)*(strlen(pDirent->d_name)));
+       strcpy(nextpathorfile,pDirent->d_name);
+       int newsize = strlen(pathorfile) + strlen(nextpathorfile) + 1;
+       char *new = (char*)malloc(sizeof(char)*(newsize));
+       strcpy(new, pathorfile);
+       if(new[strlen(new)-1] != '/'){
+           strcat(new, "/");
+       }
+       strcat(new, nextpathorfile);
+       if(strcmp(nextpathorfile, ".") == 0 || strcmp(nextpathorfile, "..") == 0){
+           continue;
+       }
+       struct stat path_stat;
+       stat(new, &path_stat);
+       if(S_ISDIR(path_stat.st_mode)){ //is a directory
+           printf("Directory: %s\n", new);
+           DeleteAll(new);
+       }
+       else if(S_ISREG(path_stat.st_mode)){ //is a file
+           printf("File: %s\n", new);
+	   remove(new);
+       }
+   }
+   closedir(pDir);
+   rmdir(pathorfile);
+   return;
+}
+
 void create(char* token){
     printf("token is %s\n", token);
     token = strtok(NULL, " "); 
     printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
-    	printf("Project already exists\n");
+    	printf("Project already exists. Create failed.\n");
     }
     else if (ENOENT == errno)	//directory doesn't exist
     {
-		mkdir(token, 0700);
-	    char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+	mkdir(token, 0700);
+	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
     	path = strcpy(path, token);
     	path = strcat(path, "/.Manifest");
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
        		printf("cannot create .Manifest\n");
-   		}
+   	}
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
     else{
-    	printf("Error creating project directory\n");
+    	printf("Error creating project directory.\n");
     }
 }
 
-void checkout(char* token){
+void destroy(char* token){ //need to edit later on how to expire pending commits
     printf("token is %s\n", token);
     token = strtok(NULL, " "); 
     printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
-    	printf("Project exists\n");
+	//chmod(token, 00040); //lock the directory first?
+      //"You have to use an independent mutex lock for each project. That way only one thread can access each project."
+	DeleteAll(token);
     }
     else if (ENOENT == errno)	//directory doesn't exist
     {
-        printf("Project does not exist\n");
+	printf("Project does not exist. Destroy failed.\n");
+    }
+    else{
+    	printf("Error destroying project directory.\n");
+    }
+}
+
+void checkout(char* token, int sockfd){
+    //printf("token is %s\n", token);
+    token = strtok(NULL, " "); 
+    printf("name: %s\n", token);
+    DIR* dir = opendir(token);
+    if (dir){	//directory exists
+    	printf("Project exists\n");
+    	char* systemStr = (char*)malloc(sizeof(char)*14+(strlen(token)*2+2));
+    	strcpy(systemStr, "tar cfz ");
+    	strcat(systemStr, token);
+    	strcat(systemStr, ".tgz ");
+    	strcat(systemStr, token);
+    	system(systemStr);
+    	char* tarFile = (char*)malloc(sizeof(char)*(strlen(token)+5));
+    	strcpy(tarFile, token);
+    	strcat(tarFile, ".tgz");
+    	tarFile[strlen(token)+4] = '\0';
+    	printf("tarFile is %s\n", tarFile);
+    	int fileptr = open(tarFile, O_RDONLY);
+		if(fileptr == -1){
+			printf("cannot open .Manifest\n");
+			exit(1);
+		}
+		int currentPos = lseek(fileptr, 0, SEEK_CUR);
+		int size = lseek(fileptr, 0, SEEK_END);    //get length of file
+		lseek(fileptr, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		printf("size is %i\n", size);
+		int tracker = 0;
+		int linesize = 0;
+		int new = 0;
+		//new = creat("work.tgz", O_APPEND | O_RDWR | 0600);
+		if(read(fileptr, c, size) != 0){
+			//while (tracker < size){
+				//printf("%c", c[tracker]);
+				//tracker++;
+			//}
+			char sendtar[size+1];
+			memcpy(sendtar, c, size);
+			sendtar[size] = '\0';
+			char sendSize[40];
+			sprintf(sendSize, "%d", size);
+			//write(sockfd, sendSize, strlen(sendSize));
+			//printf("send tar is this \n%s", sendtar);
+			//new = creat("work.tgz", O_APPEND | O_RDWR | 0600);
+			write(sockfd, sendtar, size);
+			remove(tarFile);
+    	}
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+        printf("Project does not exist. Checkout failed.\n");
         exit(1);
     }
 }
+
+void update(char* token, int sockfd){	//send manifest to client
+	token = strtok(NULL, " "); 
+	printf("name: %s\n", token);
+    DIR* dir = opendir(token);
+    if (dir){	//directory exists
+    	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+		strcpy(path, token);
+		strcat(path, "/.Manifest");
+		int manifestFile;
+		manifestFile = open(path, O_RDONLY);
+		if(manifestFile == -1){
+			printf("cannot open .Manifest\n");
+			exit(1);
+		}
+		int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+		int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+		lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		printf("size is %i\n", size);
+		int tracker = 0;
+		int linesize = 0;
+		if(read(manifestFile, c, size) != 0){
+			printf("reading manifest\n");
+			write(sockfd, c, size);
+		}
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+        printf("Project does not exist. Update failed.\n");
+        write(sockfd, "exit", 5);
+        close(sockfd);
+        exit(1);
+    }
+}
+// Function designed for chat between client and server. 
 void *func(void* vptr_sockfd){ 
     int sockfd = *((int *) vptr_sockfd);
     char buff[MAX]; 
     int n; 
-    // infinite loop for chat 
-    for (;;) { 
-        bzero(buff, MAX); 
-  
-        // read the message from client and copy it in buffer 
-        read(sockfd, buff, sizeof(buff)); 
-        // print buffer which contains the client contents 
-        printf("From client: %s\t To client : ", buff);
-	    char* token = strtok(buff, ":");
-	    if (strcmp(token, "create") == 0){
-        	create(token);
-	    }
-        else if (strcmp(token, "checkout") == 0){
-            printf("checkout\n");
-            checkout(token);
-        }
-        bzero(buff, MAX); 
-        n = 0; 
-        // copy server message in the buffer 
-        //while ((buff[n++] = getchar()) != '\n'); 
-        // and send that buffer to client 
-        //write(sockfd, buff, sizeof(buff));
-        break;  
-    } 
+    bzero(buff, MAX); 
+    
+    // read the message from client and copy it in buffer 
+    read(sockfd, buff, sizeof(buff)); 
+    // print buffer which contains the client contents 
+    printf("From client: %s\t To client: ", buff);
+    char* token = strtok(buff, ":");
+    printf("token is %s\n", token);
+    if (strcmp(token, "create") == 0){
+    	printf("Performing create command....\n");
+    	create(token);
+    }
+    else if (strcmp(token, "destroy") == 0){
+	printf("Performing destroy command....\n");
+	destroy(token);
+    }
+    else if (strcmp(token, "checkout") == 0){
+    	printf("Performing checkout command....\n");
+    	checkout(token, sockfd);
+    }
+    else if (strcmp(token, "update") ==0){
+    	printf("Performing update command....\n");
+    	update(token, sockfd);
+    }
+    else{
+    	printf("Invalid command reached towards server. Exiting.\n");
+    	exit(1);
+    }
+    bzero(buff, MAX); 
+    n = 0; 
+    // copy server message in the buffer 
+    //while ((buff[n++] = getchar()) != '\n'); 
+    // and send that buffer to client 
+    //write(sockfd, buff, sizeof(buff));
 } 
   
 // Driver function 
 int main(int argc, char *argv[]) 
 { 
-    createManifestData("test");
-    /*
+	//checkout("test");
+    //createManifestData("test");
+
     if (argc!= 2){
         printf("Incorrect number of arguments. Enter a port number\n");
         exit(1);
@@ -236,7 +385,7 @@ int main(int argc, char *argv[])
     for(i = 0; i<strlen(port); i++){
       //printf("current char: %c\n", port[i]);
       if(!isdigit(port[i])){
-	//printf("Invalid port number\n");
+	printf("Invalid port number\n");
 	exit(0);
       }
     }
@@ -263,14 +412,14 @@ int main(int argc, char *argv[])
         exit(0); 
     } 
     else
-        printf("Server listening..\n"); 
+        printf("Server listening...\n"); 
     len = sizeof(cli); 
   
     // Accept the data packet from client and verification 
     connfd = accept(sockfd, (SA*)&cli, &len); 
 
     while(!(connfd < 0)){
-	  printf("server accept the client...\n");
+	  printf("Server accepted the client...\n");
 	  //not sure if this works right here (need to test), thread also creates warning when compiled but works
 	  //also need to make a struct to keep track of threads to close them properly when reaching SIGINT(CTRL+C)
 	  pthread_t thread_id;
@@ -290,5 +439,4 @@ int main(int argc, char *argv[])
 
     // After chatting close the socket 
     close(sockfd); 
-    */
 } 
