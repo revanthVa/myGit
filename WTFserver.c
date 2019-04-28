@@ -139,6 +139,44 @@ void createManifestData(char* project){
 	close(manifestFile);
 }
 
+void DeleteAll(char* pathorfile){ //implements recursive function to delete all files and subdirectories of server folder
+   printf("Current path: %s\n", pathorfile);
+   struct dirent *pDirent;
+   DIR *pDir;
+   pDir = opendir(pathorfile);
+   if(pDir == NULL){
+       printf("Cannot open directory '%s'\n", pathorfile);
+       return;
+   }
+   while ((pDirent = readdir(pDir)) != NULL) {
+       char* nextpathorfile = (char*)malloc(sizeof(char)*(strlen(pDirent->d_name)));
+       strcpy(nextpathorfile,pDirent->d_name);
+       int newsize = strlen(pathorfile) + strlen(nextpathorfile) + 1;
+       char *new = (char*)malloc(sizeof(char)*(newsize));
+       strcpy(new, pathorfile);
+       if(new[strlen(new)-1] != '/'){
+           strcat(new, "/");
+       }
+       strcat(new, nextpathorfile);
+       if(strcmp(nextpathorfile, ".") == 0 || strcmp(nextpathorfile, "..") == 0){
+           continue;
+       }
+       struct stat path_stat;
+       stat(new, &path_stat);
+       if(S_ISDIR(path_stat.st_mode)){ //is a directory
+           printf("Directory: %s\n", new);
+           DeleteAll(new);
+       }
+       else if(S_ISREG(path_stat.st_mode)){ //is a file
+           printf("File: %s\n", new);
+	   remove(new);
+       }
+   }
+   closedir(pDir);
+   rmdir(pathorfile);
+   return;
+}
+
 void create(char* token){
     printf("token is %s\n", token);
     token = strtok(NULL, " "); 
@@ -163,6 +201,25 @@ void create(char* token){
     }
     else{
     	printf("Error creating project directory.\n");
+    }
+}
+
+void destroy(char* token){ //need to edit later on how to expire pending commits
+    //printf("token is %s\n", token);
+    token = strtok(NULL, " "); 
+    //printf("name: %s\n", token);
+    DIR* dir = opendir(token);
+    if (dir){	//directory exists
+	//chmod(token, 00040); //lock the directory first?
+      //"You have to use an independent mutex lock for each project. That way only one thread can access each project."
+		DeleteAll(token);
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+		printf("Project does not exist. Destroy failed.\n");
+    }
+    else{
+    	printf("Error destroying project directory.\n");
     }
 }
 
@@ -292,6 +349,7 @@ void currentversion(char* token, int sockfd){
         write(sockfd, "exit", 5);
     }
 }
+
 // Function designed for chat between client and server. 
 void *func(void* vptr_sockfd){ 
     int sockfd = *((int *) vptr_sockfd);
@@ -309,20 +367,24 @@ void *func(void* vptr_sockfd){
     	printf("Performing create command....\n");
     	create(token);
     }
+    else if (strcmp(token, "destroy") == 0){
+		printf("Performing destroy command....\n");
+		destroy(token);
+    }
     else if (strcmp(token, "checkout") == 0){
     	printf("Performing checkout command....\n");
     	checkout(token, sockfd);
-    }
-    else if (strcmp(token, "update") == 0){
-    	printf("performing update command....\n");
-    	update(token, sockfd);
     }
     else if(strcmp(token, "currentversion") == 0){
     	printf("performing currentversion command....\n");
     	currentversion(token, sockfd);
     }
+    else if (strcmp(token, "update") ==0){
+    	printf("Performing update command....\n");
+    	update(token, sockfd);
+    }
     else{
-    	printf("do nothing\n");
+    	printf("Invalid command reached towards server. Exiting.\n");
     	exit(1);
     }
     bzero(buff, MAX); 

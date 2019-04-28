@@ -131,11 +131,11 @@ void create(char* name){
     printf("Sending create command request to server.....\n");
     write(sockfd, str, strlen(str)+1);
     DIR* dir = opendir(name);
+    char* path = (char*)malloc(sizeof(char)*(strlen(name)+12));
+    path = strcpy(path, name);
+    path = strcat(path, "/.Manifest");
     if (ENOENT == errno){ //directory doesn't exist
     	mkdir(name, 0700);
-    	char* path = (char*)malloc(sizeof(char)*(strlen(name)+12));
-    	path = strcpy(path, name);
-    	path = strcat(path, "/.Manifest");
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
@@ -144,10 +144,44 @@ void create(char* name){
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
-	char buff[MAX];
-	//read(sockfd, buff, sizeof(buff));
-	//printf("buff is %s\n", buff);
-	close(sockfd);
+    else if (dir){ //checks if local copy has a manifestFile
+      int file = open(path, O_RDONLY);
+      if (file == -1){
+	printf("The project was created successfully in the server repository but creating it in local repository failed because a directory with that name already exists. Please remove/rename and use checkout to obtain a copy of the newly created project.\n");
+	exit(1);
+      }
+      close(file);
+    }
+    char buff[MAX];
+    //read(sockfd, buff, sizeof(buff));
+    //printf("buff is %s\n", buff);
+    close(sockfd);
+}
+
+void destroy(char* name){
+    char *str = (char*)malloc(sizeof(char)*(strlen(name)+10));
+    str = strcpy(str, "destroy:");
+    str = strcat(str, name);
+    //printf("str is %s\n", str);
+    int sockfd = connectServer();
+    printf("Sending destroy command request to server.....\n");
+    write(sockfd, str, strlen(str)+1);
+    DIR* dir = opendir(name);
+    //then delete the manifest file on client if directory exists.
+    if (dir){ //directory exists
+	char* manifestPath = (char*)malloc(sizeof(char)*(strlen(name)+12));
+	manifestPath = strcpy(manifestPath, name);
+	manifestPath = strcat(manifestPath, "/.Manifest");
+	//printf("manifest path is: %s\n", manifestPath);
+	remove(manifestPath);
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+	printf("Client side does not have local copy of project.\n");
+    }
+    else{
+    	printf("Error destroying project directory on client side.\n");
+    }
 }
 
 char* createDigest(char* fileName, char* digest){
@@ -249,7 +283,7 @@ void checkAdd(char* fileName, char* dirName, char* digest){	//check if file is a
 void add(char* dirName, char* fileName){
 	DIR* dir = opendir(dirName);
 	if (dir){	//directory exists
-    }
+	}
 	else if (ENOENT == errno){ //directory doesn't exist
 		printf("%s doesn't exist\n", dirName);
 		exit(1);
@@ -378,7 +412,6 @@ void checkout(char* projectName){
 	remove(createTar);
 	//printf("From Server : %s", buff); 
 	printf("completed checkout\n");
-	
 	close(sockfd);
 }
 
@@ -1025,38 +1058,59 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		configure(argv[2], argv[3]);
+		printf("Client command completed.\n");
 		//int sockfd = connectServer();
 		//func(sockfd);
 		//close(sockfd);
 	}
 	else if (strcmp(argv[1], "create")== 0){
 		if (argc !=3){
-			printf("Incorrect number of arguments for create\n");
+			printf("Incorrect number of arguments for create\n.");
 			exit(1);
 		}
 		create(argv[2]);
+		printf("Client command completed.\n");
 		//printf("create\n");
+	}
+	else if (strcmp(argv[1], "destroy")== 0){
+		if (argc !=3){
+			printf("Incorrect number of arguments for destroy\n");
+			exit(1);
+		}
+		destroy(argv[2]);
+		printf("Client command completed.\n");
 	}
 	else if (strcmp(argv[1], "add") == 0){
 		if (argc !=4){
-			printf("Incorrect number of arguments for add\n");
+			printf("Incorrect number of arguments for add\n.");
 			exit(1);
 		}
 		add(argv[2], argv[3]);
+		printf("Client command completed.\n");
 	}
 	else if (strcmp(argv[1], "remove") == 0){
 		if (argc !=4){
-			printf("Incorrect number of arguments for remove\n");
+			printf("Incorrect number of arguments for remove\n.");
 			exit(1);
 		}
 		removeFile(argv[2],argv[3]);
+		printf("Client command completed.\n");
 	}
 	else if (strcmp(argv[1], "checkout") == 0){
 		if (argc !=3){
-			printf("Incorrect number of arguments for checkout\n");
+			printf("Incorrect number of arguments for checkout\n.");
 			exit(1);
 		}
 		checkout(argv[2]);
+		printf("Client command completed.\n");
+	}
+	else if (strcmp(argv[1], "update") == 0){
+		if (argc != 3){
+			printf("Incorrect number of arguments for update\n.");
+			exit(1);
+		}
+		update(argv[2]);
+		printf("Client command completed.\n");
 	}
 	else if (strcmp(argv[1], "update") == 0){
 		if (argc != 3){
@@ -1072,4 +1126,5 @@ int main(int argc, char *argv[]){
 		currentversion(argv[2]);
 	}
 	printf("Client command completed.\n");
+	return 0;
 }
