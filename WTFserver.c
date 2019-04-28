@@ -194,7 +194,7 @@ void checkout(char* token, int sockfd){
 		lseek(fileptr, currentPos, SEEK_SET);  //set position back to start
 		char c[size+1];
 		c[size+1] = '\0';
-		printf("size is %i\n", size);
+		//printf("size is %i\n", size);
 		int tracker = 0;
 		int linesize = 0;
 		int new = 0;
@@ -225,7 +225,7 @@ void checkout(char* token, int sockfd){
 
 void update(char* token, int sockfd){	//send manifest to client
 	token = strtok(NULL, " "); 
-	printf("name: %s\n", token);
+	//printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
     	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
@@ -235,27 +235,61 @@ void update(char* token, int sockfd){	//send manifest to client
 		manifestFile = open(path, O_RDONLY);
 		if(manifestFile == -1){
 			printf("cannot open .Manifest\n");
-			exit(1);
+			write(sockfd, "exit", 5);
 		}
-		int currentPos = lseek(manifestFile, 0, SEEK_CUR);
-		int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
-		lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
-		char c[size+1];
-		c[size+1] = '\0';
-		printf("size is %i\n", size);
-		int tracker = 0;
-		int linesize = 0;
-		if(read(manifestFile, c, size) != 0){
-			printf("reading manifest\n");
-			write(sockfd, c, size);
+		else{
+			int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+			int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+			lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+			char c[size+1];
+			c[size+1] = '\0';
+			//printf("size is %i\n", size);
+			int tracker = 0;
+			int linesize = 0;
+			if(read(manifestFile, c, size) != 0){
+				//printf("reading manifest\n");
+				write(sockfd, c, size);
+			}
 		}
     }
     else if (ENOENT == errno)	//directory doesn't exist
     {
         printf("Project does not exist. Update failed.\n");
         write(sockfd, "exit", 5);
-        close(sockfd);
-        exit(1);
+    }
+}
+
+void currentversion(char* token, int sockfd){
+	token = strtok(NULL, " "); 
+	//printf("name: %s\n", token);
+	DIR* dir = opendir(token);
+    if (dir){	//directory exists
+    	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+		strcpy(path, token);
+		strcat(path, "/.Manifest");
+		int manifestFile;
+		manifestFile = open(path, O_RDONLY);
+		if(manifestFile == -1){
+			printf("cannot open .Manifest\n");
+			write(sockfd, "exit", 5);
+		}
+		int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+		int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+		lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		//printf("size is %i\n", size);
+		int tracker = 0;
+		int linesize = 0;
+		if(read(manifestFile, c, size) != 0){
+			//printf("reading manifest\n");
+			write(sockfd, c, size);
+		}
+    }
+    else if (ENOENT == errno)	//directory doesn't exist
+    {
+        printf("Project does not exist. currentversion failed.\n");
+        write(sockfd, "exit", 5);
     }
 }
 // Function designed for chat between client and server. 
@@ -279,9 +313,13 @@ void *func(void* vptr_sockfd){
     	printf("Performing checkout command....\n");
     	checkout(token, sockfd);
     }
-    else if (strcmp(token, "update") ==0){
+    else if (strcmp(token, "update") == 0){
     	printf("performing update command....\n");
     	update(token, sockfd);
+    }
+    else if(strcmp(token, "currentversion") == 0){
+    	printf("performing currentversion command....\n");
+    	currentversion(token, sockfd);
     }
     else{
     	printf("do nothing\n");

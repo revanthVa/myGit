@@ -933,6 +933,87 @@ void update(char* projectName){
 	close(updateFile);
 }
 
+void currentversion(char* projectName){
+	char* sendStr = (char*)malloc(sizeof(char)*strlen(projectName)+17);
+	strcpy(sendStr, "currentversion:");
+	strcat(sendStr, projectName);
+	//printf("sendStr is %s\n", sendStr);
+	int sockfd = connectServer();
+	write(sockfd, sendStr, strlen(sendStr));
+	int len = 0;
+	int size = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    }
+    char buff[len+1]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		size += len;
+	}
+	//printf("size is %i\n", size);
+	if (strcmp(buff, "exit") == 0){
+		printf("Error. Project or Manifest does not exist on the server\n");
+		exit(1);
+	}
+	int tracker = 0;
+	int linesize = 0;
+	int firstline = 0;
+	while (tracker < size){
+		linesize = 0;
+		while (buff[tracker] != '\n' && buff[tracker] != '\0'){
+			tracker++;
+			linesize++;
+		}
+		if (linesize <2){ //skips first line
+			if (firstline == 0){	//gets version of manifest on first line
+				char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
+				memcpy(totalVersion, &buff[tracker-linesize], linesize);
+				totalVersion[linesize] = '\0';
+				serverVersion = atoi(totalVersion);
+				//printf("totalVersion is %i\n", clientVersion);
+				firstline++;
+			}
+			tracker++;
+			continue;	//line doces not have contain a filename
+		}
+		char* line = (char*)malloc(sizeof(char)*linesize+1);
+		memcpy(line, &buff[tracker-linesize], linesize);
+		line[linesize] = '\0';
+		//printf("line is %s\n", line);
+		int numPosition = tracker+2-linesize;
+		int numSize = 0;
+		while (buff[numPosition] != ' '){	//gets length of version
+			numPosition++;
+			numSize++;
+			if (numSize > 500){
+				printf("error\n");
+				exit(1);
+			}
+		}
+		char* version = (char*)malloc(sizeof(char)*(numSize+1));
+		memcpy(version, &buff[tracker+2-linesize], numSize);
+		version[numSize] = '\0';
+		int ver = atoi(version);
+		int fileNameSize = linesize-44-strlen(version)+1; //with null teminator
+		//printf("linesize is %i\n", linesize);
+		//printf("fileNamesize is %i\n", fileNameSize);
+		char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
+		memcpy(fileName, &buff[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
+		fileName[fileNameSize-1] = '\0';
+		char* hash = (char*)malloc(sizeof(char)*41);
+		memcpy(hash, &buff[tracker-linesize+strlen(version)+strlen(fileName)+4], 40);
+		hash[41] = '\0';
+		printf("%s ", fileName);
+		printf("%s\n", version);
+		//printf("hash is %s\n", hash);
+		addManifestData(fileName, hash, ver, 1);
+		free(fileName);
+		free(hash);
+		free(version);
+	}
+	close(sockfd);
+}
+
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
 		printf("Incorrect number of arguments");
@@ -983,6 +1064,12 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		update(argv[2]);
-	printf("Client command completed.\n");
 	}
+	else if (strcmp(argv[1], "currentversion") == 0){
+		if (argc !=3 ){
+			printf("Incoreect number of arguments for currentversion");
+		}
+		currentversion(argv[2]);
+	}
+	printf("Client command completed.\n");
 }
