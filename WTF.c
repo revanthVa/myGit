@@ -958,7 +958,7 @@ void update(char* projectName){
 	}
 	char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
    	path = strcpy(path, projectName);
-    path = strcat(path, "/.update");
+    path = strcat(path, "/.Update");
 	int updateFile = creat(path, O_APPEND | O_RDWR | 0600);
 	if (clientVersion != serverVersion){
 		int conflictPresent = updateConflicts();
@@ -1135,15 +1135,98 @@ void getUpdateData(char* updatePath){
 	close(fileptr);
 }
 
+void upgradeDelete(){
+	manifestData* mdLivePtr = livemd;
+	manifestData* mdClientPtr = clientmd;
+	
+	while (mdLivePtr != NULL){
+		while (mdClientPtr != NULL){
+			if (mdClientPtr == NULL){
+				break;
+			}
+			if (strcmp(mdClientPtr->fileName, livemd->fileName) == 0){
+				if (livemd->flag == 3){
+					mdClientPtr->flag = 3;
+				}
+			}
+			mdClientPtr = mdClientPtr->next;
+		}
+		mdLivePtr = mdLivePtr->next;
+	}
+	
+}
+
+void upgradeUM(char* projectName){
+	updateData* udPtr = ud;
+	int length = 0;
+	while (udPtr != NULL){
+		length = length + strlen(udPtr->fileName)+2;	//+2 for : and \0
+		udPtr = udPtr->next;
+	}
+	printf("length is %i\n", length);
+	char* sendStr = (char*)malloc(sizeof(char)*(strlen(projectName)*2)+23+length);
+	strcpy(sendStr, "upgrade:");
+	strcat(sendStr, projectName);	//a token will be projectName so server knows the projectName
+	strcat(sendStr, ":");
+	strcat(sendStr, projectName);
+	strcat(sendStr, "/.Manifest:");
+	printf("send str %s\n", sendStr);
+	
+	udPtr = ud;
+	while (udPtr != NULL){
+		if (udPtr->flag == 1 || udPtr->flag == 2){
+			printf("yes\n");
+			strcat(sendStr, udPtr->fileName);
+			strcat(sendStr, ":");
+			printf("sendstr is %s\n", sendStr);
+		}
+		udPtr = udPtr->next;
+	}
+	int sockfd = connectServer();
+	write(sockfd, sendStr, strlen(sendStr));
+	int len = 0;
+	int size = 0;
+	int timeout = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    	timeout++;
+    	if (timeout == 5){
+    		printf("Error no response from server\n");
+    		close(sockfd);
+    		exit(1);
+    	}
+    }
+    char buff[len+1]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		size += len;
+	}
+	//printf("size is %i\n", size);
+	if (strcmp(buff, "exit") == 0){
+		printf("Project does not exist on the server\n");
+		exit(1);
+	}
+	char* createTar = (char*)malloc(sizeof(char)*strlen(projectName)+5);
+	strcpy(createTar, projectName);
+	strcat(createTar, ".tgz");
+	int newFile = creat(createTar, O_APPEND | O_RDWR | 0600);
+	char* untar = (char*)malloc(sizeof(char)*strlen(createTar)+11);
+	strcpy(untar, "tar -xvf ");
+	strcat(untar, createTar);
+	write(newFile, buff, len);
+	system(untar);
+	remove(createTar);
+}
+
 void upgrade(char* projectName){
 	DIR* dir = opendir(projectName);
     if (dir){ //directory exists
 		char* updatePath = (char*)malloc(sizeof(char)*(strlen(projectName)+9));
 		updatePath = strcpy(updatePath, projectName);
-		updatePath = strcat(updatePath, "/.update");
+		updatePath = strcat(updatePath, "/.Update");
 		int fileptr = open(updatePath, O_RDONLY);
 		if(fileptr == -1){
-			printf("Update file doesn't exist. Please perform an update. \n");
+			printf("Update file doesn't exist. Please perform an update\n");
 			exit(1);
 		}
 		else{
@@ -1159,10 +1242,14 @@ void upgrade(char* projectName){
    			}
    			close(fileptr);
    			getUpdateData(updatePath);
+   			getClientManifestData(projectName);
+   			getLiveManifestData(projectName);
+   			//upgradeDelete();
+   			upgradeUM(projectName);
 		}
 	}
 	else if (ENOENT == errno){	//directory doesn't exist
-		printf("Client side does not have local copy of project.\n");
+		printf("Client side does not have local copy of project\n");
 	}		
 }
 
@@ -1183,64 +1270,64 @@ int main(int argc, char *argv[]){
 	}
 	else if (strcmp(argv[1], "create")== 0){
 		if (argc !=3){
-			printf("Incorrect number of arguments for create.\n");
+			printf("Incorrect number of arguments for create\n");
 			exit(1);
 		}
 		create(argv[2]);
 	}
 	else if (strcmp(argv[1], "destroy")== 0){
 		if (argc !=3){
-			printf("Incorrect number of arguments for destroy.\n");
+			printf("Incorrect number of arguments for destroy\n");
 			exit(1);
 		}
 		destroy(argv[2]);
 	}
 	else if (strcmp(argv[1], "add") == 0){
 		if (argc !=4){
-			printf("Incorrect number of arguments for add.\n");
+			printf("Incorrect number of arguments for add\n");
 			exit(1);
 		}
 		add(argv[2], argv[3]);
 	}
 	else if (strcmp(argv[1], "remove") == 0){
 		if (argc !=4){
-			printf("Incorrect number of arguments for remove.\n");
+			printf("Incorrect number of arguments for remove\n");
 			exit(1);
 		}
 		removeFile(argv[2],argv[3]);
 	}
 	else if (strcmp(argv[1], "checkout") == 0){
 		if (argc !=3){
-			printf("Incorrect number of arguments for checkout.\n");
+			printf("Incorrect number of arguments for checkout\n");
 			exit(1);
 		}
 		checkout(argv[2]);
 	}
 	else if (strcmp(argv[1], "update") == 0){
 		if (argc != 3){
-			printf("Incorrect number of arguments for update.\n");
+			printf("Incorrect number of arguments for update\n");
 			exit(1);
 		}
 		update(argv[2]);
 	}
 	else if (strcmp(argv[1], "currentversion") == 0){
 		if (argc !=3 ){
-			printf("Incorrect number of arguments for currentversion.\n");
+			printf("Incorrect number of arguments for currentversion\n");
 			exit(1);
 		}
 		currentversion(argv[2]);
 	}
 	else if (strcmp(argv[1], "upgrade") == 0){
 		if (argc != 3){
-			printf("Incorrect number of arguments for currentversion.\n");
+			printf("Incorrect number of arguments for currentversion\n");
 			exit(1);
 		}
 		upgrade(argv[2]);
 	}
 	else{
-		printf("Please enter a proper command.\n");
+		printf("Please enter a proper command\n");
 		exit(1);
 	}
-	printf("Client command completed.\n");
+	printf("Client command completed\n");
 	return 0;
 }

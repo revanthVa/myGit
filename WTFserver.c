@@ -300,7 +300,7 @@ void update(char* token, int sockfd){	//send manifest to client
 			lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
 			char c[size+1];
 			c[size+1] = '\0';
-			//printf("size is %i\n", size);
+			//printf("size is %i\n", size);f
 			int tracker = 0;
 			int linesize = 0;
 			if(read(manifestFile, c, size) != 0){
@@ -350,6 +350,101 @@ void currentversion(char* token, int sockfd){
     }
 }
 
+void upgrade(char* token, int sockfd, char* copy){
+	//printf("1st word: %s\n", token);
+	int l = 0;
+	int findProjectName = 0;
+	int i = 0;
+	char* projectName = (char*)malloc(sizeof(char)*20);
+	int tracker = 0;
+	int dirExists = 1;	//0 = false 1 = true
+	char* projectDir = malloc(10);
+	for (i = 8; i < strlen(copy); i++){	//upgrade:projectName:
+		while (copy[i] != ':'){
+			printf("copy[i] %c ", copy[i]);
+			tracker++;
+			i++;
+		}
+		projectDir = realloc(projectDir, (sizeof(char)*tracker+1));
+		memcpy(projectDir, &copy[i-tracker], tracker);
+		projectDir[tracker] = '\0';
+		printf("projectDir is %s\n", projectDir);
+		DIR* dir = opendir(projectDir);
+   	    if (dir){	//directory exists
+   	    	dirExists = 1;
+   	    }
+   	    else if (ENOENT == errno){	//directory doesn't exist
+   	    	dirExists = 0;
+       		printf("Project does not exist. upgrade failed.\n");
+      		write(sockfd, "exit", 5);
+    	}
+		break;
+	}
+	
+	if (dirExists == 1){
+		char* createTar = (char*)malloc(sizeof(char)*strlen(projectDir)+5);
+		strcpy(createTar, projectDir);
+		strcat(createTar, ".tgz");
+		printf("createTar is %s\n", createTar);
+		i = 0;
+		for (i = 0; i < strlen(copy); i++){	//gets length of all filenames with space
+			if (copy[i] == ':'){
+				l = l + 2;
+			}
+			else{
+				l++;
+			}
+		}
+		l = l -9;	//subtract unecessary tokens from copy
+		char* tarFiles = (char*)malloc(sizeof(char)*strlen(projectName)+15+l);
+		
+		while ((token = strtok(NULL, ":")) != NULL){
+			if (findProjectName == 0){		//first token will be projectName
+				int projectlength = strlen(token);
+				projectName = (char*)realloc(projectName, (sizeof(char)*projectlength+1));
+				strcpy(projectName, token);
+				projectName[projectlength] = '\0';
+				printf("projectName is %s\n", projectName);
+				strcpy(tarFiles, "tar cfz ");
+				strcat(tarFiles, projectName);
+				strcat(tarFiles, ".tgz");
+				strcat(tarFiles, " ");
+				findProjectName = 1;
+			}
+			else{
+				strcat(tarFiles, token);
+				strcat(tarFiles," ");
+				//printf("Next: %s\n", token);
+			}
+		}
+		system(tarFiles);
+		printf("tar files is %s\n", tarFiles);
+		printf("l is %i\n", l);
+    	int fileptr = open(createTar, O_RDONLY);
+		if(fileptr == -1){
+			printf("cannot open tar file\n");
+			exit(1);
+		}
+		int currentPos = lseek(fileptr, 0, SEEK_CUR);
+		int size = lseek(fileptr, 0, SEEK_END);    //get length of file
+		lseek(fileptr, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		int tracker = 0;
+		int linesize = 0;
+		int new = 0;
+		if(read(fileptr, c, size) != 0){
+			char sendtar[size+1];
+			memcpy(sendtar, c, size);
+			sendtar[size] = '\0';
+			write(sockfd, sendtar, size);
+    	}
+		remove(createTar);
+		free(tarFiles);
+		free(createTar);
+	}
+}
+
 // Function designed for chat between client and server. 
 void *func(void* vptr_sockfd){ 
     int sockfd = *((int *) vptr_sockfd);
@@ -361,6 +456,9 @@ void *func(void* vptr_sockfd){
     read(sockfd, buff, sizeof(buff)); 
     // print buffer which contains the client contents 
     printf("From client: %s\t To client: ", buff);
+    char* copy = (char*)malloc(sizeof(char)*strlen(buff)+1);
+    strcpy(copy, buff);
+    copy[strlen(buff)] = '\0';
     char* token = strtok(buff, ":");
     printf("token is %s\n", token);
     if (strcmp(token, "create") == 0){
@@ -379,9 +477,13 @@ void *func(void* vptr_sockfd){
     	printf("performing currentversion command....\n");
     	currentversion(token, sockfd);
     }
-    else if (strcmp(token, "update") ==0){
+    else if (strcmp(token, "update") == 0){
     	printf("Performing update command....\n");
     	update(token, sockfd);
+    }
+    else if (strcmp(token, "upgrade") == 0){
+    	printf("Performing upgrade command....\n");
+    	upgrade(token, sockfd, copy);
     }
     else{
     	printf("Invalid command reached towards server. Exiting.\n");
