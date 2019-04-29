@@ -281,11 +281,11 @@ void checkout(char* token, int sockfd){
 }
 
 void update(char* token, int sockfd){	//send manifest to client
-	token = strtok(NULL, " "); 
-	//printf("name: %s\n", token);
+    token = strtok(NULL, " "); 
+    //printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
-    	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+		char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
 		strcpy(path, token);
 		strcat(path, "/.Manifest");
 		int manifestFile;
@@ -316,37 +316,49 @@ void update(char* token, int sockfd){	//send manifest to client
     }
 }
 
-void currentversion(char* token, int sockfd){
+void commit(char* token, int sockfd){
+	//printf("token is %s\n", token);
 	token = strtok(NULL, " "); 
 	//printf("name: %s\n", token);
 	DIR* dir = opendir(token);
+	if (dir){	//directory exists
+	}
+	else if (ENOENT == errno){	//directory doesn't exist
+	    printf("Project does not exist. Commit failed.\n");
+	    write(sockfd, "exit", 5);
+	}
+}
+
+void currentversion(char* token, int sockfd){
+    token = strtok(NULL, " "); 
+    //printf("name: %s\n", token);
+    DIR* dir = opendir(token);
     if (dir){	//directory exists
-    	char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
-		strcpy(path, token);
-		strcat(path, "/.Manifest");
-		int manifestFile;
-		manifestFile = open(path, O_RDONLY);
-		if(manifestFile == -1){
-			printf("cannot open .Manifest\n");
-			write(sockfd, "exit", 5);
-		}
-		int currentPos = lseek(manifestFile, 0, SEEK_CUR);
-		int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
-		lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
-		char c[size+1];
-		c[size+1] = '\0';
-		//printf("size is %i\n", size);
-		int tracker = 0;
-		int linesize = 0;
-		if(read(manifestFile, c, size) != 0){
-			//printf("reading manifest\n");
-			write(sockfd, c, size);
-		}
+	  char* path = (char*)malloc(sizeof(char)*(strlen(token)+12));
+	  strcpy(path, token);
+	  strcat(path, "/.Manifest");
+	  int manifestFile;
+	  manifestFile = open(path, O_RDONLY);
+	  if(manifestFile == -1){
+	    printf("cannot open .Manifest\n");
+	    write(sockfd, "exit", 5);
+	  }
+	  int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+	  int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+	  lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
+	  char c[size+1];
+	  c[size+1] = '\0';
+	  //printf("size is %i\n", size);
+	  int tracker = 0;
+	  int linesize = 0;
+	  if(read(manifestFile, c, size) != 0){
+	    //printf("reading manifest\n");
+	    write(sockfd, c, size);
+	  }
     }
-    else if (ENOENT == errno)	//directory doesn't exist
-    {
-        printf("Project does not exist. currentversion failed.\n");
-        write(sockfd, "exit", 5);
+    else if (ENOENT == errno){	//directory doesn't exist
+	  printf("Project does not exist. Currentversion command failed.\n");
+	  write(sockfd, "exit", 5);
     }
 }
 
@@ -485,9 +497,11 @@ void *func(void* vptr_sockfd){
     	printf("Performing upgrade command....\n");
     	upgrade(token, sockfd, copy);
     }
-    else{
+    else if(strcmp(token, "commit") == 0){
+		printf("Performing commit command.....\n");
+		commit(token, sockfd);
+    }else{
     	printf("Invalid command reached towards server. Exiting.\n");
-    	exit(1);
     }
     bzero(buff, MAX); 
     n = 0; 
@@ -580,4 +594,5 @@ int main(int argc, char *argv[])
 
     // After chatting close the socket 
     close(sockfd); 
+    return 0;
 } 

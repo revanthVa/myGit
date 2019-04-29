@@ -20,7 +20,7 @@ typedef struct manifestData{
 	char* fileName;
 	char* hash;
 	short flag; // U = 0 M = 1 A = 2 D = 3
-	int version;
+	int version; ////individual file version number for manifest
 	struct manifestData* next;
 }manifestData;
 
@@ -146,7 +146,7 @@ void create(char* name){
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
-	    printf("cannot create .Manifest\n");
+	   printf("cannot create .Manifest\n");
    	}
     	write(manifestFile, "1", 1);
     	close(manifestFile);
@@ -154,8 +154,8 @@ void create(char* name){
     else if (dir){ //checks if local copy has a manifestFile
       int file = open(path, O_RDONLY);
       if (file == -1){
-	printf("The project was created successfully in the server repository but creating it in local repository failed because a directory with that name already exists. Please remove/rename and use checkout to obtain a copy of the newly created project.\n");
-	exit(1);
+	  printf("The project was created successfully in the server repository but creating it in local repository failed because a directory with that name already exists. Please remove/rename and use checkout to obtain a copy of the newly created project.\n");
+	  exit(1);
       }
       close(file);
     }
@@ -399,9 +399,9 @@ void checkout(char* projectName){
 	int len = 0;
 	int totalSize = 0;
 	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
-    	sleep(1);
-    }
-    char buff[len]; 
+	  sleep(1);
+	}
+	char buff[len]; 
 	if (len > 0) {
   		len = read(sockfd, buff, len);
   		totalSize += len;
@@ -529,36 +529,36 @@ void getLiveManifestData(char* pathorfile){	//goes through all subdirectories an
    	char *new = (char*)malloc(sizeof(char)*(newsize));
    	strcpy(new, pathorfile);
    	if(new[strlen(new)-1] != '/'){
-       	strcat(new, "/");
+	    strcat(new, "/");
    	}
    	strcat(new, nextpathorfile);
    	if(strcmp(nextpathorfile, ".") == 0 || strcmp(nextpathorfile, "..") == 0){
-       	continue;
+	    continue;
    	}
    	struct stat path_stat;
    	stat(new, &path_stat);
    	if(S_ISDIR(path_stat.st_mode)){ //is a directory
-       	//printf("Directory: %s\n", new);
-       	getLiveManifestData(new);
+	    //printf("Directory: %s\n", new);
+	    getLiveManifestData(new);
    	}
    	else if(S_ISREG(path_stat.st_mode)){ //is a file
-       	//printf("File: %s\n", new);
-       	manifestData* mdClientPtr = clientmd;
-       	while (mdClientPtr != NULL && strcmp(mdClientPtr->fileName, new) != 0){
-  			mdClientPtr = mdClientPtr->next;
-       	}
-       	if (mdClientPtr == NULL){
-       		continue;
-       	}
-       	else if (strcmp(mdClientPtr->fileName, new) == 0){
-       		printf("yes they are the same %s\n", new);
-		   	char* digest = (char*)malloc(sizeof(char)*41);
-		   	digest[41] = '\0';
-		   	createDigest(new, digest);
-		   	addLiveManifestData(new, digest);
-		   	free(digest);
-       	}
-   		}
+	    //printf("File: %s\n", new);
+	    manifestData* mdClientPtr = clientmd;
+	    while (mdClientPtr != NULL && strcmp(mdClientPtr->fileName, new) != 0){
+			    mdClientPtr = mdClientPtr->next;
+	    }
+	    if (mdClientPtr == NULL){
+		    continue;
+	    }
+	    else if (strcmp(mdClientPtr->fileName, new) == 0){
+		    printf("yes they are the same %s\n", new);
+			    char* digest = (char*)malloc(sizeof(char)*41);
+			    digest[41] = '\0';
+			    createDigest(new, digest);
+			    addLiveManifestData(new, digest);
+			    free(digest);
+	    }
+	}
    }
    closedir(pDir);
 }
@@ -636,16 +636,16 @@ void getClientManifestData(char* projectName){
 }
 
 void getServerManifestData(char* projectName){
-	int sockfd = connectServer();
-	char* message = (char*)malloc(sizeof(char)*strlen(projectName+9));
-	strcpy(message, "update:");
-	strcat(message, projectName);
-	//printf("message is %s\n", message);
-	write(sockfd, message, strlen(message)+1);
-	int len = 0;
-	int size = 0;
-	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
-    	sleep(1);
+    int sockfd = connectServer();
+    char* message = (char*)malloc(sizeof(char)*strlen(projectName+9));
+    strcpy(message, "update:");
+    strcat(message, projectName);
+    //printf("message is %s\n", message);
+    write(sockfd, message, strlen(message)+1);
+    int len = 0;
+    int size = 0;
+    while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+	sleep(1);
     }
     char buff[len+1]; 
 	if (len > 0) {
@@ -676,7 +676,7 @@ void getServerManifestData(char* projectName){
 				firstline++;
 			}
 			tracker++;
-			continue;	//line doces not have contain a filename
+			continue;	//line does not have contain a filename
 		}
 		char* line = (char*)malloc(sizeof(char)*linesize+1);
 		memcpy(line, &buff[tracker-linesize], linesize);
@@ -949,11 +949,11 @@ void update(char* projectName){
 	manifestData* mdLivePtr = livemd;
 	
 	if (clientVersion == -1){
-		printf("could not get client manifest version\n");
+		printf("Could not get client manifest version\n.");
 		exit(1);
 	}
 	if (serverVersion == -1){
-		printf("could not get server manifest version\n");
+		printf("Could not get server manifest version\n.");
 		exit(1);
 	}
 	char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
@@ -981,6 +981,57 @@ void update(char* projectName){
 		printf("Up to date\n");
 	}
 	close(updateFile);
+}
+
+void commit(char* projectName){
+      getServerManifestData(projectName);
+      DIR* dir = opendir(projectName);
+      if (dir){ //directory exists
+	  char* updatePath = (char*)malloc(sizeof(char)*(strlen(projectName)+9));
+	  updatePath = strcpy(updatePath, projectName);
+	  updatePath = strcat(updatePath, "/.update");
+	  int file = open(updatePath, O_RDONLY);
+	  if(file == -1){ //update file doesn't exist
+	  }
+	  else{ //if update file exists, check if empty
+	      int currentPos = lseek(file, 0, SEEK_CUR);
+	      int size = lseek(file, 0, SEEK_END); //get length of file
+	      lseek(file, currentPos, SEEK_SET); //set position back to start
+	      char c[size+1];
+	      if(size != 0){
+		  printf("There are pending updates need to be made. Upgrade first and commit again.\n");
+		  exit(0);
+	      }
+	  }
+	  close(file);
+      }
+      else if (ENOENT == errno){    //directory doesn't exist
+	  printf("Client side does not have local copy of project.\n");
+      }
+      else{
+	  printf("Error accessing directory.\n");
+      }
+      getClientManifestData(projectName);
+      if (clientVersion != serverVersion){
+	  printf("Client version is not up to date with server version. Please update the local project first.\n");
+	  exit(1);
+      }
+      /*else{ //version numbers match
+	  //compute hashes
+	  
+	  char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+12));
+	  path = strcpy(path, projectName);
+	  path = strcat(path, "/.Commit");
+	      int commitFile;
+	      commitFile = creat(path, O_WRONLY | 0600);
+	      if(commitFile == -1){
+		  printf("cannot create .Commit\n");
+	      }
+	      write(manifestFile, "1", 1);
+	      close(manifestFile);
+	  }
+      }*/
+
 }
 
 void currentversion(char* projectName){
@@ -1309,6 +1360,13 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		update(argv[2]);
+	}
+	else if (strcmp(argv[1], "commit") == 0){
+		if (argc != 3){
+			printf("Incorrect number of arguments for commit.\n");
+			exit(1);
+		}
+		commit(argv[2]);
 	}
 	else if (strcmp(argv[1], "currentversion") == 0){
 		if (argc !=3 ){
