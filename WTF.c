@@ -399,9 +399,9 @@ void checkout(char* projectName){
 	int len = 0;
 	int totalSize = 0;
 	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
-    	sleep(1);
-    }
-    char buff[len]; 
+	  sleep(1);
+	}
+	char buff[len]; 
 	if (len > 0) {
   		len = read(sockfd, buff, len);
   		totalSize += len;
@@ -987,7 +987,7 @@ void commit(char* projectName){
       getServerManifestData(projectName);
       DIR* dir = opendir(projectName);
       if (dir){ //directory exists
-	  char* updatePath = (char)malloc(sizeof(char)(strlen(projectName)+9));
+	  char* updatePath = (char*)malloc(sizeof(char)*(strlen(projectName)+9));
 	  updatePath = strcpy(updatePath, projectName);
 	  updatePath = strcat(updatePath, "/.update");
 	  int file = open(updatePath, O_RDONLY);

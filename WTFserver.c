@@ -398,7 +398,7 @@ void *func(void* vptr_sockfd){
     else if(strcmp(token, "commit") == 0){
 	printf("Performing commit command.....\n");
 	commit(token, sockfd);
-    else{
+    }else{
     	printf("Invalid command reached towards server. Exiting.\n");
     	exit(1);
     }
