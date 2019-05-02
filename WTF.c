@@ -1016,23 +1016,67 @@ void commit(char* projectName){
 	  printf("Client version is not up to date with server version. Please update the local project first.\n");
 	  exit(1);
       }
-      /*else{ //version numbers match
+      else{ //version numbers match
 	  //compute hashes
-	  
-	  char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+12));
+	  getClientManifestData(projectName);
+	  getLiveManifestData(projectName);
+	  char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
 	  path = strcpy(path, projectName);
 	  path = strcat(path, "/.Commit");
-	      int commitFile;
-	      commitFile = creat(path, O_WRONLY | 0600);
-	      if(commitFile == -1){
-		  printf("cannot create .Commit\n");
-	      }
-	      write(manifestFile, "1", 1);
-	      close(manifestFile);
+	  printf("path of commit: %s\n", path);
+	  int commitFile = creat(path, O_APPEND | O_RDWR | 0600);
+	  if(commitFile == -1){
+	      printf("cannot create .Commit\n");
+	      exit(1);
 	  }
-      }*/
-
-}
+	  manifestData* liveptr = livemd;
+	  manifestData* serverptr = servermd;
+	  manifestData* clientptr = clientmd;
+	  /*- get the server's .Manifest and compare all entries in it with the client's .Manifest and find out
+	  which files the client has that are newer versions than the ones on the server, or the server does
+	  not have, and write out a .Commit recording all the changes that need to be made.*/
+	  while(liveptr != NULL){
+	      serverptr = servermd;
+	      while(liveptr->fileName != serverptr->fileName){
+		    serverptr = serverptr->next;
+	      }
+	      if(serverptr == NULL){ //clientfilename is not inside of server, but in the client
+		    //indicate that file needs to be added to the repository
+		    
+	      }
+	      else if(strcmp(liveptr->hash, serverptr->hash) != 0){ //filename exists in both client and server, but live-hash and server-hash are not equal
+		    //version number of client file should be incremented (inside of .Commit, but also inside of the local client's .Manifest?)
+		    //indicate that file needs to be updated
+		    char* writeStr = (char*)malloc(sizeof(char)*strlen(liveptr->fileName)+5);//WORKINGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+		    strcpy(writeStr, "U ");
+		    strcat(writeStr, liveptr->fileName);
+		    /*while((clientptr->fileName != liveptr->fileName)||(clientptr != NULL)){ 
+			  
+		    }*/
+		    strcat(writeStr, "\n");
+		    //write(commitFile, "1", 1);
+	      }
+	      //else, filename exists in both client and server and hash values are the same, so do nothing
+	      liveptr = liveptr->next;
+	  }
+	  serverptr = servermd;
+	  liveptr = livemd;
+	  while(serverptr != NULL){ //search if any server filenames do not exist inside client
+	      liveptr = livemd;
+	      while(liveptr->fileName != serverptr->fileName){
+		    liveptr = liveptr->next;
+	      }
+	      if(liveptr == NULL){ //current server file does not exist inside of client
+		    //indicate that file needs to be deleted to the repository
+		    
+	      }
+	      serverptr = serverptr->next;
+	  }
+	  //now report success if successful
+	  close(commitFile);
+	  }
+      }
+     
 
 void currentversion(char* projectName){
 	char* sendStr = (char*)malloc(sizeof(char)*strlen(projectName)+17);
