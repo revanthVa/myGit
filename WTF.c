@@ -1363,7 +1363,7 @@ int main(int argc, char *argv[]){
 	}
 	else if (strcmp(argv[1], "commit") == 0){
 		if (argc != 3){
-			printf("Incorrect number of arguments for commit.\n");
+			printf("Incorrect number of arguments for commit\n");
 			exit(1);
 		}
 		commit(argv[2]);
