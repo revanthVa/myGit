@@ -808,12 +808,10 @@ void createBackup(char* projectName){
 		strcat(backupName, projectName);
 		strcat(backupName, "1.tgz");
 		
-		char* createTar = (char*)malloc(sizeof(char)*strlen(backupName)+strlen(projectName)+strlen(versionsFolder)+27);
+		char* createTar = (char*)malloc(sizeof(char)*strlen(backupName)+strlen(projectName)+13);
 		strcpy(createTar, "tar cfz ");
 		strcat(createTar, backupName);
-		strcat(createTar, " --exclude='");
-		strcat(createTar, versionsFolder);
-		strcat(createTar, "' ");
+		strcat(createTar, " ");
 		strcat(createTar, projectName);
 		//printf("the backups folder name is %s\n", createTar);
 		system(createTar);
@@ -841,12 +839,10 @@ void createBackup(char* projectName){
 		strcat(backupName, projectName);
 		strcat(backupName, strVer);
 		strcat(backupName,".tgz");
-		char* createTar = (char*)malloc(sizeof(char)*strlen(backupName)+strlen(projectName)+strlen(versionsFolder)+27);
+		char* createTar = (char*)malloc(sizeof(char)*strlen(backupName)+strlen(projectName)+strlen(versionsFolder)+13);
 		strcpy(createTar, "tar cfz ");
 		strcat(createTar, backupName);
-		strcat(createTar, " --exclude='");
-		strcat(createTar, versionsFolder);
-		strcat(createTar, "' ");
+		strcat(createTar, " ");
 		strcat(createTar, projectName);
 		//printf("the backups folder name is %s\n", createTar);
 		system(createTar);
@@ -857,6 +853,58 @@ void createBackup(char* projectName){
 	}
 }
 
+int getHistoryVersion(char* projectName){
+	char* versionsPath = (char*)malloc(sizeof(char)*strlen(projectName)+12);
+	strcpy(versionsPath, projectName);
+	strcat(versionsPath, "/.Versions");
+	DIR* dir;
+	struct dirent * entry;
+	dir = opendir(versionsPath);
+	if(ENOENT == errno){ //no .Versions folder should not happen
+	}
+	else{
+		int fileCount = 0;	//file count is version number for history
+		while ((entry = readdir(dir)) != NULL) {
+    		if (entry->d_type == DT_REG) { // If the entry is a regular file 
+         		fileCount++;
+    		}
+		}
+		return fileCount;
+	}
+}
+
+void pushHistory(char* commitPath, char* projectName ){
+	int commitFile = open(commitPath, O_RDONLY);
+	char* historyPath = (char*)malloc(sizeof(char)*strlen(projectName)+11);
+	strcpy(historyPath, projectName);
+	strcat(historyPath, "/.History");
+	int historyFile = open(commitPath, O_APPEND | O_RDWR);
+	
+	int fileCount = getHistoryVersion(projectName);
+	int fileCountLength = snprintf( NULL, 0, "%d", fileCount);
+	char strVer[fileCountLength+1];	
+	strVer[fileCountLength+1] = '\0';
+	sprintf(strVer, "%d", fileCount); //convert int to string
+	write(historyFile, strVer, strlen(strVer));
+	
+	int currentPos = lseek(commitFile, 0, SEEK_CUR);
+	int size = lseek(commitFile, 0, SEEK_END);    //get length of file
+	lseek(commitFile, currentPos, SEEK_SET);  //set position back to start
+	char c[size+1];
+	c[size+1] = '\0';
+	//printf("size is %i\n", size);
+	int tracker = 0;
+	int linesize = 0;
+	if(read(commitFile, c, size) != 0){
+		//printf("reading manifest\n");
+	    write(historyFile, c, size);
+	    write(historyFile, "\n", 1);
+	}
+	
+	free(historyPath);
+	close(historyFile);
+	close(commitFile);
+}
 void push(char* token, int sockfd){
 	token = strtok(NULL, ":");
 	//printf("token is %s\n", token);
@@ -929,8 +977,8 @@ void push(char* token, int sockfd){
    				write(sockfd, "exit", 5);
    				return;
    			}
-   			DeleteAll(commitsDir);
    			createBackup(projectName);
+   			DeleteAll(commitsDir);
    			
    			createNewManifest(manifestFile, newManifest, path);
    			char* untar = (char*)malloc(sizeof(char)*strlen(createTar)+11);
@@ -939,6 +987,8 @@ void push(char* token, int sockfd){
    			system(untar);
    			remove(createTar);
    			free(untar);
+   			
+   			pushHistory(commitPath, projectName);	//update the .History
    			remove(commitPath);
    			
    			manifestFile = open(path, O_RDONLY);	//send new manifest back to client
@@ -982,30 +1032,61 @@ void rollback(char* token, int sockfd){
 	strcat(versionPath, projectName);
 	strcat(versionPath, token);
 	strcat(versionPath, ".tgz");
-	//printf("version path is %s\n", versionPath);
 	
-    int fileptr = open(versionPath, O_RDONLY);		//send compressed vesion to client
-	if(fileptr == -1){
+	char* newName = (char*)malloc(sizeof(char)*strlen(projectName)+6);
+	strcpy(newName, projectName);
+	strcat(newName, ".tgz");
+	printf("newName is %s\n", newName);
+	printf("version path is %s\n", versionPath);
+	int fileptr = open(versionPath, O_RDONLY);		//send compressed vesion to client
+	if(fileptr == -1){	//rollback version doesn't exist
 		write(sockfd, "exit", 5);
 		return;
 	}
-	int currentPos = lseek(fileptr, 0, SEEK_CUR);
-	int size = lseek(fileptr, 0, SEEK_END);    //get length of file
-	lseek(fileptr, currentPos, SEEK_SET);  //set position back to start
+	
+	//remove(newName);
+	rename(versionPath, newName);
+	DeleteAll(projectName);
+	
+	char* untar = (char*)malloc(sizeof(char)*strlen(projectName)+16);
+	strcpy(untar, "tar -xvf ");
+	strcat(untar, projectName);
+	strcat(untar, ".tgz");
+	system(untar);
+	write(sockfd,"success", 8);
+	
+	remove(newName);
+	free(newName);
+	free(projectName);
+	free(versionPath);
+}
+
+void history(char* token, int sockfd){
+	token = strtok(NULL, ":");
+	printf("token is %s\n", token);
+	char* historyPath = (char*)malloc(sizeof(char)*strlen(token)+11);
+	strcpy(historyPath, token);
+	strcat(historyPath, "/.History");
+	
+	int historyFile = open(historyPath, O_RDONLY);
+	if(historyFile == -1){
+		free(historyPath);
+		printf(".History does not exist\n");
+	    write(sockfd, "exit", 5);
+	    return;
+	}
+	int currentPos = lseek(historyFile, 0, SEEK_CUR);
+	int size = lseek(historyFile, 0, SEEK_END);    //get length of file
+	lseek(historyFile, currentPos, SEEK_SET);  //set position back to start
 	char c[size+1];
 	c[size+1] = '\0';
 	int tracker = 0;
 	int linesize = 0;
-	int new = 0;
-	if(read(fileptr, c, size) != 0){
-		char sendtar[size+1];
-		memcpy(sendtar, c, size);
-		sendtar[size] = '\0';
-		write(sockfd, sendtar, size);
-    }
-
-	free(projectName);
-	free(versionPath);
+	if(read(historyFile, c, size) != 0){
+		write(sockfd, c, size);
+	}
+	
+	free(historyPath);
 }
 
 void *func(void* vptr_sockfd){ 
@@ -1057,6 +1138,10 @@ void *func(void* vptr_sockfd){
     else if (strcmp(token, "rollback") == 0){
     	printf("Performing rollback command....\n");
     	rollback(token, sockfd);
+    }
+    else if (strcmp(token, "history") == 0){
+    	printf("Performing history command....\n");
+    	history(token, sockfd);
     }
     else{
     	printf("Invalid command reached towards server. Exiting.\n");

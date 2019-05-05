@@ -1154,7 +1154,7 @@ void currentversion(char* projectName){
 		printf("%s ", fileName);
 		printf("%s\n", version);
 		//printf("hash is %s\n", hash);
-		addManifestData(fileName, hash, ver, 1);
+		//addManifestData(fileName, hash, ver, 1);
 		free(fileName);
 		free(hash);
 		free(version);
@@ -1685,18 +1685,32 @@ void rollback(char* projectName, char* version){
 		printf("Rollback version does not exist on server\n");
 		exit(1);
 	}
-	DeleteAll(projectName);	//delete current project folder
-	char* createTar = (char*)malloc(sizeof(char)*strlen(projectName)+6);
-	strcpy(createTar, projectName);
-	strcpy(createTar, ".tgz");
-	int newFile = creat(createTar, O_APPEND | O_RDWR | 0600);
-	char* untar = (char*)malloc(sizeof(char)*strlen(createTar)+11);
-	strcpy(untar, "tar -xvf ");
-	strcat(untar, createTar);
-	write(newFile, buff, len);
-	system(untar);
-	remove(createTar);
-	free(createTar);
+}
+
+void history(char* projectName){
+	char* sendStr = (char*)malloc(sizeof(char)*strlen(projectName)+10);
+	strcpy(sendStr, "history:");
+	strcat(sendStr, projectName);
+	
+	int sockfd  = connectServer();
+	write(sockfd, sendStr, strlen(sendStr)+1);
+	int len = 0;
+	int size = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    }
+    char buff[len+1]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		size += len;
+	}
+	//printf("size is %i\n", size);
+	if (strcmp(buff, "exit") == 0){
+		printf("Error. Project or Manifest does not exist on the server\n");
+		exit(1);
+	}
+	printf("%s", buff);
+	free(sendStr);
 }
 
 int main(int argc, char *argv[]){
@@ -1790,6 +1804,13 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		rollback(argv[2], argv[3]);
+	}
+	else if (strcmp(argv[1], "history") == 0){
+		if (argc!= 3){
+			printf("Incorrect number of arguments for history\n");
+			exit(1);
+		}
+		history(argv[2]);
 	}
 	else{
 		printf("Please enter a proper command\n");
