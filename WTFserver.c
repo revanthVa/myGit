@@ -211,6 +211,16 @@ void DeleteAll(char* pathorfile){ //implements recursive function to delete all 
    return;
 }
 
+void createHistory(char* projectName){
+	char* historyPath = (char*)malloc(sizeof(char)*strlen(projectName)+11);
+	strcpy(historyPath, projectName);
+	strcat(historyPath, "/.History");
+	int historyFile = creat(historyPath, O_WRONLY | 0600);
+	write(historyFile, "create\n1\n", 9);
+	close(historyPath);
+	free(historyPath);
+}
+
 void create(char* token){
     printf("token is %s\n", token);
     token = strtok(NULL, " "); 
@@ -229,7 +239,8 @@ void create(char* token){
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
        		printf("cannot create .Manifest\n");
-   	}
+   		}
+   		createHistory(token);
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
@@ -875,36 +886,69 @@ int getHistoryVersion(char* projectName){
 
 void pushHistory(char* commitPath, char* projectName ){
 	int commitFile = open(commitPath, O_RDONLY);
+	char* manifestPath = (char*)malloc(sizeof(char)*strlen(projectName+12));
+	strcpy(manifestPath, projectName);
+	strcat(manifestPath, "/.Manifest");
+	int manifestFile = open(manifestPath, O_RDONLY);
+
 	char* historyPath = (char*)malloc(sizeof(char)*strlen(projectName)+11);
 	strcpy(historyPath, projectName);
 	strcat(historyPath, "/.History");
-	int historyFile = open(commitPath, O_APPEND | O_RDWR);
+	int historyFile = open(historyPath, O_APPEND | O_RDWR);
 	
-	int fileCount = getHistoryVersion(projectName);
-	int fileCountLength = snprintf( NULL, 0, "%d", fileCount);
-	char strVer[fileCountLength+1];	
-	strVer[fileCountLength+1] = '\0';
-	sprintf(strVer, "%d", fileCount); //convert int to string
-	write(historyFile, strVer, strlen(strVer));
-	
-	int currentPos = lseek(commitFile, 0, SEEK_CUR);
-	int size = lseek(commitFile, 0, SEEK_END);    //get length of file
-	lseek(commitFile, currentPos, SEEK_SET);  //set position back to start
+	int currentPos = lseek(manifestFile, 0, SEEK_CUR);
+	int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
+	lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
 	char c[size+1];
 	c[size+1] = '\0';
 	//printf("size is %i\n", size);
 	int tracker = 0;
 	int linesize = 0;
+	int firstline = 0;
+	if(read(manifestFile, c, size) != 0){
+		while (tracker < size){
+	    	linesize = 0;
+	    	while (c[tracker] != '\n'){
+      			tracker++;
+      			linesize++;
+      		}
+      		if (linesize < 10){ //skips first line
+				if (firstline == 0){
+			  		char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
+			  		memcpy(totalVersion, &c[tracker-linesize], linesize);
+			  		totalVersion[linesize] = '\0';
+			  		write(historyFile, "\n", 1);
+			  		write(historyFile, totalVersion, strlen(totalVersion));
+			  		write(historyFile, "\n", 1);
+			  		free(totalVersion);
+			  		break;
+		  		}
+		  	}
+		}
+	}
+	
+	
+	currentPos = lseek(commitFile, 0, SEEK_CUR);
+	size = lseek(commitFile, 0, SEEK_END);    //get length of file
+	lseek(commitFile, currentPos, SEEK_SET);  //set position back to start
+	c[size+1];
+	c[size+1] = '\0';
+	//printf("size is %i\n", size);
+	tracker = 0;
+	linesize = 0;
 	if(read(commitFile, c, size) != 0){
 		//printf("reading manifest\n");
 	    write(historyFile, c, size);
 	    write(historyFile, "\n", 1);
 	}
 	
+	free(manifestPath);
 	free(historyPath);
 	close(historyFile);
 	close(commitFile);
+	close(manifestFile);
 }
+
 void push(char* token, int sockfd){
 	token = strtok(NULL, ":");
 	//printf("token is %s\n", token);
@@ -1016,6 +1060,7 @@ void push(char* token, int sockfd){
     free(untarCommit);
 }
 // Function designed for chat between client and server. 
+
 void rollback(char* token, int sockfd){
 	int x = 0;
 	token = strtok(NULL, ":");	//token is projectName now
