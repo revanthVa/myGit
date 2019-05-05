@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <openssl/sha.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #define MAX 80 
 
 //gcc -g -o WTF WTF.c -lssl -lcrypto
@@ -34,6 +35,7 @@ typedef struct updateData{
 manifestData* servermd = NULL;
 manifestData* clientmd = NULL;
 manifestData* livemd = NULL;
+manifestData* commitmd = NULL;
 updateData* ud = NULL;
 
 int serverVersion = -1;
@@ -239,7 +241,7 @@ void checkAdd(char* fileName, char* dirName, char* digest){	//check if file is a
 				tracker++;
 				linesize++;
 			}
-			if (linesize <2){ //skips first line
+			if (linesize < 10){ //skips first line
 				tracker++;
 				continue;	//line doces not have contain a filename
 			}
@@ -351,9 +353,9 @@ void removeFile(char* dirName, char* fileName){
 	int tracker = 0;
 	int linesize = 0;
 	char* newFilename = (char*)malloc(sizeof(char)*(strlen(dirName)+17));
-	newFilename = strcpy(newFilename, dirName);
-	newFilename = strcat(newFilename, "/tempfilerename");
-	int newFile = creat(newFilename, O_APPEND | O_WRONLY | 0600);
+	//newFilename = strcpy(newFilename, dirName);
+	newFilename = strcat(newFilename, "tempfilerename");
+	int newFile = creat(fileName, O_APPEND | O_WRONLY | 0600);
 	if(read(manifest, c, size) != 0){
 		if (strstr(c, fileName) == NULL){
 			printf("%s is not in the manifest\n", fileName);
@@ -380,8 +382,8 @@ void removeFile(char* dirName, char* fileName){
 	}
 	close(manifest);
 	close(newFile);
-	remove(manifestPath);
-	rename(newFilename, manifestPath);
+	remove(fileName);
+	rename(newFilename, fileName);
 }
 
 void checkout(char* projectName){
@@ -588,7 +590,7 @@ void getClientManifestData(char* projectName){
 				tracker++;
 				linesize++;
 			}
-			if (linesize <2){ //skips first line
+			if (linesize < 10){ //skips first line
 				if (firstline == 0){
 					char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
 					memcpy(totalVersion, &c[tracker-linesize], linesize);
@@ -668,7 +670,7 @@ void getServerManifestData(char* projectName){
 			tracker++;
 			linesize++;
 		}
-		if (linesize <2){ //skips first line
+		if (linesize < 10){ //skips first line
 			if (firstline == 0){	//gets version of manifest on first line
 				char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
 				memcpy(totalVersion, &buff[tracker-linesize], linesize);
@@ -1280,7 +1282,7 @@ void currentversion(char* projectName){
 			tracker++;
 			linesize++;
 		}
-		if (linesize <2){ //skips first line
+		if (linesize < 10){ //skips first line
 			if (firstline == 0){	//gets version of manifest on first line
 				char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
 				memcpy(totalVersion, &buff[tracker-linesize], linesize);
@@ -1322,7 +1324,7 @@ void currentversion(char* projectName){
 		printf("%s ", fileName);
 		printf("%s\n", version);
 		//printf("hash is %s\n", hash);
-		addManifestData(fileName, hash, ver, 1);
+		//addManifestData(fileName, hash, ver, 1);
 		free(fileName);
 		free(hash);
 		free(version);
@@ -1368,7 +1370,7 @@ void getUpdateData(char* updatePath){
 				tracker++;
 				linesize++;
 			}
-			if (linesize <2){ //skips first line
+			if (linesize < 10){ //skips first line
 				tracker++;
 				continue;	//line doces not have contain a filename
 			}
@@ -1519,6 +1521,368 @@ void upgrade(char* projectName){
 	}		
 }
 
+void addCommitData(char* fileName, char* hash, int version, short flag){
+	if (commitmd == NULL){
+		commitmd = (manifestData*)malloc(sizeof(manifestData));
+		commitmd->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+		strcpy(commitmd->fileName, fileName);
+		commitmd->hash = (char*)malloc(sizeof(char)*41);
+		strcpy(commitmd->hash, hash);
+		commitmd->version = version;
+		commitmd->flag = flag;
+		commitmd->next = NULL;
+		//printf("server fileName %s\n", commitmd->fileName);
+		//printf("server hash %s\n", commitmd->hash);
+		//printf("server version %i\n", commitmd->version);
+	}
+	else{
+		manifestData* mdptr = commitmd;
+		while (mdptr->next != NULL){
+			mdptr = mdptr->next;
+		}
+		manifestData* tmp = (manifestData*)malloc(sizeof(manifestData));
+		tmp->fileName = (char*)malloc(sizeof(char)*strlen(fileName)+1);
+		strcpy(tmp->fileName, fileName);
+		tmp ->hash = (char*)malloc(sizeof(char)*41);
+		strcpy(tmp->hash, hash);
+		tmp->version = version;
+		tmp->flag = flag;
+		tmp->next = NULL;
+		mdptr->next = tmp;
+		//printf("s fileName %s\n", mdptr->next->fileName);
+		//printf("s hash %s\n", mdptr->next->hash);
+		//printf("s version %i\n", mdptr->next->version);
+		//printf("s flag %i\n", mdptr->next->flag);
+	}
+		
+}
+void getCommitData(char* projectName){
+	char* commitPath = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
+	commitPath = strcpy(commitPath, projectName);
+	commitPath = strcat(commitPath, "/.Commit");
+	int commitFile = open(commitPath, O_RDWR);
+	if (commitFile == -1){
+		printf(".Commit doesn't exist on the client\n");
+		exit(1);
+	}
+	int currentPos = lseek(commitFile, 0, SEEK_CUR);
+	int size = lseek(commitFile, 0, SEEK_END);    //get length of file
+	lseek(commitFile, currentPos, SEEK_SET);  //set position back to start
+	char c[size+1];
+	int tracker = 0;
+	int linesize = 0;
+	int firstline = 0;
+	if(read(commitFile, c, size) != 0){
+		while (tracker < size){
+			linesize = 0;
+			while (c[tracker] != '\n'){
+				tracker++;
+				linesize++;
+			}
+			if (linesize < 10){ //skips first line
+				tracker++;
+				continue;	//line doces not have contain a filename
+			}
+			char* line = (char*)malloc(sizeof(char)*linesize+1);
+			memcpy(line, &c[tracker-linesize], linesize);
+			line[linesize] = '\0';
+			//printf("line is %s\n", line);
+			int numPosition = tracker+2-linesize;
+			int numSize = 0;
+			while (c[numPosition] != ' '){	//gets length of version
+				numPosition++;
+				numSize++;
+				if (numSize > 500){
+					printf("error\n");
+					exit(1);
+				}
+			}
+			char* version = (char*)malloc(sizeof(char)*(numSize+1));
+			memcpy(version, &c[tracker+2-linesize], numSize);
+			version[numSize] = '\0';
+			char* updateFlag = (char*)malloc(sizeof(char)*2);
+			memcpy(updateFlag, &c[tracker-linesize], 1);
+			updateFlag[1] = '\0';
+			int ver = atoi(version);
+			int fileNameSize = linesize-44-strlen(version)+1; //with null teminator
+			//printf("linesize is %i\n", linesize);
+			//printf("fileNamesize is %i\n", fileNameSize);
+			char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
+			memcpy(fileName, &c[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
+			fileName[fileNameSize-1] = '\0';
+			char* hash = (char*)malloc(sizeof(char)*41);
+			memcpy(hash, &c[tracker-linesize+strlen(version)+strlen(fileName)+4], 40);
+			hash[41] = '\0';
+			//printf("fileName is %s\n", fileName);
+			//printf("hash is %s\n", hash);
+			//printf("version is %s\n", version);
+			//printf("update flag is %s\n", updateFlag);
+			if (strcmp(updateFlag, "U") == 0){
+				addCommitData(fileName, hash, ver, 0);
+			}
+			else if (strcmp(updateFlag, "A") == 0){
+				addCommitData(fileName, hash, ver, 2);
+			}
+			else if (strcmp(updateFlag, "D") == 0){
+				addCommitData(fileName, hash, ver, 3);
+			}
+			free(fileName);
+			free(hash);
+			free(version);
+			free(updateFlag);
+		}
+	}
+	close(commitFile);
+}
+
+void push(char* projectName){	//check if commit exists fsfsdsfdsfsfdssfds
+      //getServerManifestData(projectName);
+      char* commitPath = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
+      commitPath = strcpy(commitPath, projectName);
+      commitPath = strcat(commitPath, "/.Commit");
+      int commitFile = open(commitPath, O_RDWR);
+      if (commitFile == -1){
+      	printf(".Commit doesn't exist on the client\n");
+      	exit(1);
+      }
+      
+      DIR* dir = opendir(projectName);
+      if (dir){ //directory exists
+		  char* updatePath = (char*)malloc(sizeof(char)*(strlen(projectName)+9));
+		  updatePath = strcpy(updatePath, projectName);
+		  updatePath = strcat(updatePath, "/.Update");
+		  int file = open(updatePath, O_RDONLY);
+		  if(file == -1){ //update file doesn't exist
+		  }
+		  else{ //if update file exists, check if empty
+			  int currentPos = lseek(file, 0, SEEK_CUR);
+			  int size = lseek(file, 0, SEEK_END); //get length of file
+			  if(size != 0){
+			  	printf("There are pending updates need to be made. Upgrade first and commit again.\n");
+			  	exit(0);
+			  }
+		  }
+		  close(file);
+		  getCommitData(projectName);
+		  manifestData* mdptr = commitmd;
+		  int length = 0;
+		  while (mdptr != NULL){	// gets length for all file names in .Commit
+		  	length = length + strlen(mdptr->fileName)+2;	//+2 for space and \0
+		  	mdptr = mdptr->next;
+		  }
+		  //printf("length is %i\n", length);
+		  char* tarFiles = (char*)malloc(sizeof(char)* (strlen(projectName)*2 + 26 + length));
+		  strcpy(tarFiles, "tar cfz ");
+		  strcat(tarFiles, projectName);
+		  strcat(tarFiles, ".tgz ");
+		  strcat(tarFiles, projectName);
+		  strcat(tarFiles, "/.Commit ");
+		  //strcat(tarFiles, projectName);
+		  mdptr = commitmd;
+		  while (mdptr != NULL){
+			strcat(tarFiles, mdptr->fileName);
+			strcat(tarFiles, " ");
+			//printf("tarFiles is %s\n", tarFiles);
+			mdptr = mdptr->next;
+		}
+		//printf("tarFiles is %s\n", tarFiles);
+		//printf("tarFiles is %s\n", tarFiles);
+		system(tarFiles);
+		free(tarFiles);
+		char* sendStr = (char*)malloc(sizeof(char)*strlen(projectName)+7);
+		strcpy(sendStr, "push:");
+		strcat(sendStr, projectName);
+		//printf("sendStr is %s\n", sendStr);
+		int sockfd = connectServer();
+		/*int n = 0;
+		fd1set set;
+		struct timeval timeout;
+		FD_ZERO(&set);
+		FD_SET(sockfd, &set);
+		timeout.tv_sec = 5;
+		timeout.tv_usec = 0;
+		//select(FD_SETSIZE, &set, NULL, NULL, &timeout);
+		//select(FD_SETSIZE, &set, NULL, NULL, &timeout);
+		select(FD_SETSIZE, &set, NULL, NULL, &timeout);
+		*/
+		write(sockfd, sendStr, strlen(sendStr));
+		sleep(1);
+		
+    	char* tarFile = (char*)malloc(sizeof(char)*(strlen(projectName)+5));	//for opening tarFile
+    	strcpy(tarFile, projectName);
+    	strcat(tarFile, ".tgz");
+    	tarFile[strlen(projectName)+4] = '\0';
+    	//printf("tarFile is %s\n", tarFile);
+    	int fileptr = open(tarFile, O_RDONLY);
+		if(fileptr == -1){
+			printf("cannot open compressed file \n");
+			exit(1);
+		}
+		else{
+			//printf("opened tar\n");
+		}
+		int currentPos = lseek(fileptr, 0, SEEK_CUR);
+		int size = lseek(fileptr, 0, SEEK_END);    //get length of file
+		lseek(fileptr, currentPos, SEEK_SET);  //set position back to start
+		char c[size+1];
+		c[size+1] = '\0';
+		//printf("size is %i\n", size);
+		int tracker = 0;
+		int linesize = 0;
+		int new = 0;
+		//new = creat("work.tgz", O_APPEND | O_RDWR | 0600);
+		if(read(fileptr, c, size) != 0){
+			write(sockfd, c, size);
+		}
+		remove(tarFile);
+		
+		int len = 0;
+		size = 0;
+		int timeouts = 0;
+		while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+			//printf("ok\n");
+    		sleep(1);
+    		timeouts++;
+    		if (timeouts == 5){
+    			printf("Error no response from server\n");
+    			remove(commitPath);
+    			close(sockfd);
+    			exit(1);
+    		}
+   	 	}
+    	char buff[len+1]; 
+		if (len > 0) {
+  			len = read(sockfd, buff, len);
+  			size += len;
+		}
+		//printf("size is %i\n", size);
+		if (strcmp(buff, "exit") == 0){
+			printf("Push failed, check if commit exists on server\n");
+			remove(commitPath);
+			exit(1);
+		}
+		else{
+			char* oldManifest = (char*)malloc(sizeof(char)*strlen(projectName)+11);
+			strcpy(oldManifest, projectName);
+			strcat(oldManifest, "/.Manifest");
+			//printf("old manifest is %s\n", oldManifest);
+			remove(oldManifest);
+			int newManifestFile = creat(oldManifest, O_APPEND | O_RDWR | 0600);
+			write(newManifestFile, buff, len);
+			close(newManifestFile);
+			remove(commitPath);
+		}
+	}
+	else if (ENOENT == errno){    //directory doesn't exist
+		printf("Client side does not have local copy of project.\n");
+	}
+}
+
+void DeleteAll(char* pathorfile){ //implements recursive function to delete all files and subdirectories of server folder
+   //printf("Current path: %s\n", pathorfile);
+   struct dirent *pDirent;
+   DIR *pDir;
+   pDir = opendir(pathorfile);
+   if(pDir == NULL){
+       //printf("Cannot open directory '%s'\n", pathorfile);
+       return;
+   }
+   while ((pDirent = readdir(pDir)) != NULL) {
+       char* nextpathorfile = (char*)malloc(sizeof(char)*(strlen(pDirent->d_name)));
+       strcpy(nextpathorfile,pDirent->d_name);
+       int newsize = strlen(pathorfile) + strlen(nextpathorfile) + 1;
+       char *new = (char*)malloc(sizeof(char)*(newsize));
+       strcpy(new, pathorfile);
+       if(new[strlen(new)-1] != '/'){
+           strcat(new, "/");
+       }
+       strcat(new, nextpathorfile);
+       if(strcmp(nextpathorfile, ".") == 0 || strcmp(nextpathorfile, "..") == 0){
+           continue;
+       }
+       struct stat path_stat;
+       stat(new, &path_stat);
+       if(S_ISDIR(path_stat.st_mode)){ //is a directory
+           //printf("Directory: %s\n", new);
+           DeleteAll(new);
+       }
+       else if(S_ISREG(path_stat.st_mode)){ //is a file
+           //printf("File: %s\n", new);
+	   remove(new);
+       }
+   }
+   closedir(pDir);
+   rmdir(pathorfile);
+   return;
+}
+
+void rollback(char* projectName, char* version){
+	int ver = atoi(version);
+	//printf("ver is %i\n", ver);
+	if (ver < 1){	//lowest version is 1
+		printf("Invalid version number\n");
+		exit(1);
+	}
+	char* sendStr = (char*)malloc(sizeof(char)*(strlen(projectName)+strlen(version)+14));
+	strcpy(sendStr, "rollback:");
+	strcat(sendStr, projectName);
+	strcat(sendStr, ":");
+	strcat(sendStr, version);
+	
+	int sockfd = connectServer();
+	write(sockfd, sendStr, strlen(sendStr));
+	free(sendStr);
+	
+	int len = 0;
+	int size = 0;
+	int timeout = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    	timeout++;
+    	if (timeout == 5){
+    		printf("Error no response from server\n");
+    		close(sockfd);
+    		exit(1);
+    	}
+    }
+    char buff[len+1]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		size += len;
+	}
+	//printf("size is %i\n", size);
+	if (strcmp(buff, "exit") == 0){
+		printf("Rollback version does not exist on server\n");
+		exit(1);
+	}
+}
+
+void history(char* projectName){
+	char* sendStr = (char*)malloc(sizeof(char)*strlen(projectName)+10);
+	strcpy(sendStr, "history:");
+	strcat(sendStr, projectName);
+	
+	int sockfd  = connectServer();
+	write(sockfd, sendStr, strlen(sendStr)+1);
+	int len = 0;
+	int size = 0;
+	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
+    	sleep(1);
+    }
+    char buff[len+1]; 
+	if (len > 0) {
+  		len = read(sockfd, buff, len);
+  		size += len;
+	}
+	//printf("size is %i\n", size);
+	if (strcmp(buff, "exit") == 0){
+		printf("Error. Project or Manifest does not exist on the server\n");
+		exit(1);
+	}
+	printf("%s", buff);
+	free(sendStr);
+}
+
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
 		printf("Incorrect number of arguments");
@@ -1578,7 +1942,7 @@ int main(int argc, char *argv[]){
 	}
 	else if (strcmp(argv[1], "commit") == 0){
 		if (argc != 3){
-			printf("Incorrect number of arguments for commit.\n");
+			printf("Incorrect number of arguments for commit\n");
 			exit(1);
 		}
 		commit(argv[2]);
@@ -1596,6 +1960,27 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		upgrade(argv[2]);
+	}
+	else if (strcmp(argv[1], "push") == 0){
+		if (argc != 3){
+			printf("Inorrect number of arguments for currentversion\n");
+			exit(1);
+		}
+		push(argv[2]);
+	}
+	else if (strcmp(argv[1], "rollback") == 0){
+		if (argc!= 4){
+			printf("Incorrect number of arguments for rollback\n");
+			exit(1);
+		}
+		rollback(argv[2], argv[3]);
+	}
+	else if (strcmp(argv[1], "history") == 0){
+		if (argc!= 3){
+			printf("Incorrect number of arguments for history\n");
+			exit(1);
+		}
+		history(argv[2]);
 	}
 	else{
 		printf("Please enter a proper command\n");
