@@ -41,23 +41,6 @@ updateData* ud = NULL;
 int serverVersion = -1;
 int clientVersion = -1;
 
-void func(int sockfd) 
-{ 
-    char buff[MAX]; 
-    int n; 
-    for (;;) { 
-        bzero(buff, sizeof(buff)); 
-        printf("Enter the string : "); 
-        n = 0; 
-        while ((buff[n++] = getchar()) != '\n') 
-            ; 
-        write(sockfd, buff, sizeof(buff)); 
-        bzero(buff, sizeof(buff)); 
-        read(sockfd, buff, sizeof(buff)); 
-        printf("From Server : %s", buff); 
-	break;
-    } 
-} 
 
 int connectServer(){ //gets ip and port from file and connects
 	int conf;
@@ -140,6 +123,28 @@ void create(char* name){
     int sockfd = connectServer();
     printf("Sending create command request to server.....\n");
     write(sockfd, str, strlen(str)+1);
+    
+    int len = 0;
+    int timeouts = 0;
+    while (!len && ioctl(sockfd,FIONREAD,&len) >= 0){
+		sleep(1);
+		timeouts++;
+		if (timeouts == 5){
+			printf("Erorr. Server timed out\n");
+			close(sockfd);
+			exit(1);
+		}
+	  }
+	  char buff[len+1]; 
+	  if (len > 0) {
+	      len = read(sockfd, buff, len);
+	  }
+	  //printf("size is %i\n", size);
+	  if (strcmp(buff, "exit") == 0){
+	    printf("Create failed. Directory may already exist on server\n");
+	    exit(1);
+	  }
+    
     DIR* dir = opendir(name);
     char* path = (char*)malloc(sizeof(char)*(strlen(name)+12));
     path = strcpy(path, name);
@@ -149,20 +154,21 @@ void create(char* name){
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
-	   printf("cannot create .Manifest\n");
-   	}
+	   		printf("cannot create .Manifest\n");
+   		}
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
     else if (dir){ //checks if local copy has a manifestFile
+      printf("directory already exists on client\n");
       int file = open(path, O_RDONLY);
       if (file == -1){
-	  printf("The project was created successfully in the server repository but creating it in local repository failed because a directory with that name already exists. Please remove/rename and use checkout to obtain a copy of the newly created project.\n");
+	  printf("\n");
 	  exit(1);
       }
       close(file);
     }
-    char buff[MAX];
+    //char buff[MAX];
     //read(sockfd, buff, sizeof(buff));
     //printf("buff is %s\n", buff);
     close(sockfd);

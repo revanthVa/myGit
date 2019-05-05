@@ -222,13 +222,14 @@ void createHistory(char* projectName){
 	free(historyPath);
 }
 
-void create(char* token){
+void create(char* token, int sockfd){
     printf("token is %s\n", token);
     token = strtok(NULL, " "); 
     printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
     	printf("Project already exists. Create failed.\n");
+    	write(sockfd, "exit", 5);
     }
     else if (ENOENT == errno)	//directory doesn't exist
     {
@@ -244,9 +245,12 @@ void create(char* token){
    		createHistory(token);
     	write(manifestFile, "1", 1);
     	close(manifestFile);
+    	free(path);
+    	write(sockfd, "success", 8);
     }
     else{
     	printf("Error creating project directory.\n");
+    	write(sockfd, "exit", 5);
     }
 }
 
@@ -1208,7 +1212,7 @@ void *func(void* vptr_sockfd){
     printf("token is %s\n", token);
     if (strcmp(token, "create") == 0){
     	printf("Performing create command....\n");
-    	create(token);
+    	create(token, sockfd);
     }
     else if (strcmp(token, "destroy") == 0){
 	printf("Performing destroy command....\n");
