@@ -8,7 +8,8 @@
 #include <sys/types.h> 
 #include <dirent.h>
 #include <errno.h>
-#include <sys/stat.h> 
+#include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <openssl/sha.h>
@@ -381,10 +382,66 @@ void update(char* token, int sockfd){	//send manifest to client
 
 void commit(char* token, int sockfd){
 	//printf("token is %s\n", token);
-	token = strtok(NULL, " "); 
+	token = strtok(NULL, " "); //commit project name
+	printf("commit project name: %s\n", token);
+	char *dirpath = (char*)malloc(sizeof(char)*(strlen(token)+10));
+	strcpy(dirpath, token);
+	strcat(dirpath, "/.Commits");
 	//printf("name: %s\n", token);
-	DIR* dir = opendir(token);
+	DIR* dir;
+	dir = opendir(token);
 	if (dir){	//directory exists
+	    dir = opendir(dirpath);
+	    if(ENOENT == errno){ //no .Commits folder yet, so make mkdir()
+		printf("no .Commits folder. Creating it.\n");
+		int directory = mkdir(dirpath, 0700);
+		dir = opendir(dirpath);
+	    }
+	    srand ( time(NULL) ); //generate random number for commit between 1 and 100000
+	    int randmal = (rand() % 100000) + 1;
+	    int temp = randmal;
+	    int count = 0;
+	    while(temp != 0){
+		temp = temp/10;
+		++count;
+	    }
+	    char *strrandmal = (char*)malloc(sizeof(char)*(count));
+	    sprintf(strrandmal, "%i", randmal);
+	    char *commitName = (char*)malloc(sizeof(char)*(count+7));
+	    strcpy(commitName, "Commit");
+	    strcat(commitName, strrandmal); 
+	    char* path = (char*)malloc(sizeof(char)*(strlen(token)+strlen(commitName)+12));
+	    strcpy(path, token);
+	    strcat(path, "/.Commits/");
+	    strcat(path, commitName);
+	    printf("full path of commit: %s\n", path);
+	    int commitFile = creat(path, O_APPEND | O_RDWR | 0600);
+	    //token = strtok(NULL, " ");  //contents of commit file sent
+	    int len = 0;
+	    int timeouts = 5;
+	    while (!len && ioctl(sockfd,FIONREAD,&len) >= 0){
+		sleep(1);
+		timeouts++;
+		if (timeouts == 5){
+			printf("Error receiving message from client\n");
+			write(sockfd, "exit", 5); //send to client that response failed.
+			remove(path);
+			free(path);
+			close(sockfd);
+			exit(1);
+		}
+	    }
+	    char buffer[len];
+	    if (len > 0) {
+	      printf("reading buffer\n");
+	      len = read(sockfd, buffer, len);
+	    }
+	    buffer[len] = '\0';
+	    printf("This is the commit contents:\n%s", buffer);
+	    write(commitFile, buffer, strlen(buffer));
+	    free(strrandmal);
+	    free(commitName);
+	    close(commitFile);
 	}
 	else if (ENOENT == errno){	//directory doesn't exist
 	    printf("Project does not exist. Commit failed.\n");
@@ -1154,8 +1211,8 @@ void *func(void* vptr_sockfd){
     	create(token);
     }
     else if (strcmp(token, "destroy") == 0){
-		printf("Performing destroy command....\n");
-		destroy(token);
+	printf("Performing destroy command....\n");
+	destroy(token);
     }
     else if (strcmp(token, "checkout") == 0){
     	printf("Performing checkout command....\n");
@@ -1166,7 +1223,7 @@ void *func(void* vptr_sockfd){
     	currentversion(token, sockfd);
     }
     else if (strcmp(token, "update") == 0){
-    	printf("Performing update command....\n");
+    	printf("Request for server manifest received....\n");
     	update(token, sockfd);
     }
     else if (strcmp(token, "upgrade") == 0){
@@ -1174,9 +1231,10 @@ void *func(void* vptr_sockfd){
     	upgrade(token, sockfd, copy);
     }
     else if(strcmp(token, "commit") == 0){
-		printf("Performing commit command....\n");
-		commit(token, sockfd);
-    }else if (strcmp(token, "push") == 0){
+	printf("Performing commit command....\n"); 
+	commit(token, sockfd);
+    }
+    else if (strcmp(token, "push") == 0){
     	printf("Performing push command....\n");
     	push(token, sockfd);
     }
@@ -1187,6 +1245,9 @@ void *func(void* vptr_sockfd){
     else if (strcmp(token, "history") == 0){
     	printf("Performing history command....\n");
     	history(token, sockfd);
+    }
+    else if(strcmp(token, "exit") == 0){
+	printf("Closing thread.\n");
     }
     else{
     	printf("Invalid command reached towards server. Exiting.\n");
