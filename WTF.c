@@ -9,13 +9,14 @@
 #include <math.h>
 #include <netdb.h>
 #include <sys/socket.h> 
+#include <sys/ioctl.h>
 #include <dirent.h>
 #include <errno.h>
 #include <openssl/sha.h>
 #include <sys/ioctl.h>
 #define MAX 80 
 
-//gcc -o WTF WTF.c -lssl -lcrypto
+//gcc -g -o WTF WTF.c -lssl -lcrypto
 typedef struct manifestData{
 	char* fileName;
 	char* hash;
@@ -267,7 +268,7 @@ void checkAdd(char* fileName, char* dirName, char* digest){	//check if file is a
 				//sprintf(strVer, "%d", ver); //convert int to string
 				lseek(manifest, currentPos, SEEK_SET); //set to start
 				lseek(manifest, tracker-linesize, SEEK_SET);
-				write(manifest, "U ", 2);
+				write(manifest, "  ", 2);
 				write(manifest, version, strlen(version));
 				write(manifest, " ", 1);
 				write(manifest, fileName, strlen(fileName));
@@ -279,10 +280,11 @@ void checkAdd(char* fileName, char* dirName, char* digest){	//check if file is a
 		if (isPresent == 0){	//file not in manifest so add to the end
 			lseek(manifest, currentPos, SEEK_SET); //set to start
 			lseek(manifest, 0, SEEK_END); 
-			write(manifest, "U 1 ", 4);
+			write(manifest, "  1 ", 4);
 			write(manifest, fileName, strlen(fileName));
 			write(manifest, " ", 1);
 			write(manifest, digest, strlen(digest));
+			write(manifest, "\n", 1);
 		}
 	}
 }
@@ -307,14 +309,14 @@ void add(char* dirName, char* fileName){
 	digest[41] = '\0';
 	digest = createDigest(fileName, digest);
 	//printf("digest %s\n", digest);
-    char *writeStr = (char*)malloc(sizeof(char)*(sizeof(digest)+(strlen(fileName)+8)));
-    strcpy(writeStr, "U 1 ");
-    strcat(writeStr, fileName);
-    strcat(writeStr, " ");
-    strcat(writeStr, digest);
-    //printf("string is %s\n", writeStr);
-    checkAdd(fileName, dirName, digest);
-    printf("updated manifest\n", fileName);
+	char *writeStr = (char*)malloc(sizeof(char)*(sizeof(digest)+(strlen(fileName)+8)));
+	strcpy(writeStr, "  1 ");
+	strcat(writeStr, fileName);
+	strcat(writeStr, " ");
+	strcat(writeStr, digest);
+	//printf("string is %s\n", writeStr);
+	checkAdd(fileName, dirName, digest);
+	printf("updated manifest\n", fileName);
 }
 
 void removeFile(char* dirName, char* fileName){
@@ -551,7 +553,7 @@ void getLiveManifestData(char* pathorfile){	//goes through all subdirectories an
 		    continue;
 	    }
 	    else if (strcmp(mdClientPtr->fileName, new) == 0){
-		    printf("yes they are the same %s\n", new);
+		    //printf("yes they are the same %s\n", new);
 			    char* digest = (char*)malloc(sizeof(char)*41);
 			    digest[41] = '\0';
 			    createDigest(new, digest);
@@ -984,46 +986,48 @@ void update(char* projectName){
 }
 
 void commit(char* projectName){
-      getServerManifestData(projectName);
       DIR* dir = opendir(projectName);
       if (dir){ //directory exists
 	  char* updatePath = (char*)malloc(sizeof(char)*(strlen(projectName)+9));
 	  updatePath = strcpy(updatePath, projectName);
-	  updatePath = strcat(updatePath, "/.update");
+	  updatePath = strcat(updatePath, "/.Update");
 	  int file = open(updatePath, O_RDONLY);
 	  if(file == -1){ //update file doesn't exist
 	  }
 	  else{ //if update file exists, check if empty
-	      int currentPos = lseek(file, 0, SEEK_CUR);
 	      int size = lseek(file, 0, SEEK_END); //get length of file
-	      lseek(file, currentPos, SEEK_SET); //set position back to start
-	      char c[size+1];
 	      if(size != 0){
 		  printf("There are pending updates need to be made. Upgrade first and commit again.\n");
 		  exit(0);
 	      }
 	  }
 	  close(file);
+	  free(updatePath);
       }
       else if (ENOENT == errno){    //directory doesn't exist
 	  printf("Client side does not have local copy of project.\n");
+	  exit(1);
       }
       else{
 	  printf("Error accessing directory.\n");
       }
+      printf("getting client manifest data\n");
       getClientManifestData(projectName);
+      printf("getting server manifest data\n");
+      getServerManifestData(projectName);
+      printf("getting live manifest data\n");
+      getLiveManifestData(projectName);
+
       if (clientVersion != serverVersion){
 	  printf("Client version is not up to date with server version. Please update the local project first.\n");
 	  exit(1);
       }
       else{ //version numbers match
 	  //compute hashes
-	  getClientManifestData(projectName);
-	  getLiveManifestData(projectName);
 	  char* path = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
 	  path = strcpy(path, projectName);
 	  path = strcat(path, "/.Commit");
-	  printf("path of commit: %s\n", path);
+	  //printf("path of commit: %s\n", path);
 	  int commitFile = creat(path, O_APPEND | O_RDWR | 0600);
 	  if(commitFile == -1){
 	      printf("cannot create .Commit\n");
@@ -1032,50 +1036,217 @@ void commit(char* projectName){
 	  manifestData* liveptr = livemd;
 	  manifestData* serverptr = servermd;
 	  manifestData* clientptr = clientmd;
+	  //printManifestData();
 	  /*- get the server's .Manifest and compare all entries in it with the client's .Manifest and find out
 	  which files the client has that are newer versions than the ones on the server, or the server does
 	  not have, and write out a .Commit recording all the changes that need to be made.*/
-	  while(liveptr != NULL){
+	  while(clientptr != NULL){
 	      serverptr = servermd;
-	      while(liveptr->fileName != serverptr->fileName){
-		    serverptr = serverptr->next;
+	      if(serverptr == NULL){
+		printf("serverptr already null\n");
+	      }
+	      liveptr = livemd;
+	      if(liveptr == NULL){
+		printf("liveptr already null\n");
+	      }
+	      if(serverptr != NULL){
+		    while(strcmp(clientptr->fileName, serverptr->fileName) != 0){
+			  serverptr = serverptr->next;
+			  if(serverptr == NULL){
+			      break;
+			  }
+		    }
+	      }
+	      if(liveptr != NULL){
+		    while(strcmp(clientptr->fileName, liveptr->fileName) != 0){ //find file inside of livemd, get version number and increment it
+			  liveptr = liveptr->next;
+			  if(liveptr == NULL){
+				break;
+			  }
+		    }
 	      }
 	      if(serverptr == NULL){ //clientfilename is not inside of server, but in the client
 		    //indicate that file needs to be added to the repository
-		    
-	      }
-	      else if(strcmp(liveptr->hash, serverptr->hash) != 0){ //filename exists in both client and server, but live-hash and server-hash are not equal
-		    //version number of client file should be incremented (inside of .Commit, but also inside of the local client's .Manifest?)
-		    //indicate that file needs to be updated
-		    char* writeStr = (char*)malloc(sizeof(char)*strlen(liveptr->fileName)+5);//WORKINGGGGGGGGGGGGGGGGGGGGGGGGGGGG
-		    strcpy(writeStr, "U ");
-		    strcat(writeStr, liveptr->fileName);
-		    /*while((clientptr->fileName != liveptr->fileName)||(clientptr != NULL)){ 
-			  
-		    }*/
+		    int version = clientptr->version;
+		    if(liveptr != NULL){
+			  if(strcmp(liveptr->hash, clientptr->hash) != 0){
+			      version = version + 1;
+			  }
+		    }
+		    int temp = version;
+		    int count = 0;
+		    while(temp != 0){
+			  temp = temp/10;
+			  ++count;
+		    }
+		    char strversion[count];
+		    sprintf(strversion, "%i", version);
+		    //int writeStrlen = strlen
+		    char* writeStr = (char*)malloc(sizeof(char)*(strlen(clientptr->fileName)+strlen(clientptr->hash)+strlen(strversion)+12));
+		    strcpy(writeStr, "A ");
+		    strcat(writeStr, strversion);
+		    strcat(writeStr, " ");
+		    strcat(writeStr, clientptr->fileName);
+		    strcat(writeStr, " ");
+		    if(liveptr == NULL){ //hash not computed for client manifest file since its deleted in the current client's directory
+			  strcat(writeStr, clientptr->hash);
+		    }
+		    else{
+			  strcat(writeStr, liveptr->hash);
+		    }
 		    strcat(writeStr, "\n");
-		    //write(commitFile, "1", 1);
+		    write(commitFile, writeStr, strlen(writeStr));
+		    free(writeStr);
 	      }
-	      //else, filename exists in both client and server and hash values are the same, so do nothing
-	      liveptr = liveptr->next;
+	      else { //compare hashes between live and server, since server file is found
+		    if(liveptr == NULL){ //located client manifest file is also inside of server, but not inside livemd.
+			  clientptr = clientptr->next;
+			  continue;
+		    }
+		    //version number of client file should be incremented (inside of .Commit)
+		    //indicate that file needs to be updated
+		    if(strcmp(liveptr->hash, serverptr->hash) != 0){
+			  int newversion = clientptr->version + 1;
+			  int temp = newversion;
+			  int count = 0; //how many digits the version value is
+			  while(temp != 0){
+			      temp = temp/10;
+			      ++count;
+			  }
+			  if(newversion <= serverptr->version){ //report commit failed
+			      printf("Client needs to synch with update+upgrade before commiting. Commit failed.\n");
+			      close(commitFile);
+			      remove(path);
+			      exit(1);
+			  }
+			  char strnewversion[count];
+			  sprintf(strnewversion, "%i", newversion); //convert int to string
+			  char* writeStr = (char*)malloc(sizeof(char)*(strlen(liveptr->fileName)+strlen(liveptr->hash)+strlen(strnewversion)+10));
+			  strcpy(writeStr, "U ");
+			  strcat(writeStr, strnewversion);
+			  strcat(writeStr, " ");
+			  strcat(writeStr, liveptr->fileName);
+			  strcat(writeStr, " ");
+			  strcat(writeStr, liveptr->hash);
+			  strcat(writeStr, "\n");
+			  write(commitFile, writeStr, strlen(writeStr));
+			  free(writeStr);
+		    }
+		    //else, filename exists in both client and server and hash values are the same, so do nothing
+	      }
+	      clientptr = clientptr->next;
 	  }
 	  serverptr = servermd;
+	  clientptr = clientmd;
 	  liveptr = livemd;
 	  while(serverptr != NULL){ //search if any server filenames do not exist inside client
+	      clientptr = clientmd;
 	      liveptr = livemd;
-	      while(liveptr->fileName != serverptr->fileName){
-		    liveptr = liveptr->next;
+	      if(clientptr != NULL){
+		    while(strcmp(clientptr->fileName, serverptr->fileName) != 0){
+			  clientptr = clientptr->next;
+			  if(clientptr == NULL){
+			      break;
+			  }
+		    }
 	      }
-	      if(liveptr == NULL){ //current server file does not exist inside of client
+	      if(liveptr != NULL){
+		    if(clientptr != NULL){
+			while(strcmp(liveptr->fileName, clientptr->fileName) != 0){
+			      liveptr = liveptr->next;
+			      if(liveptr == NULL){
+				    break;
+			      }
+			}
+		    }
+	      }
+	      if(clientptr == NULL){ //current server file does not exist inside of client
 		    //indicate that file needs to be deleted to the repository
-		    
+		    int version = serverptr->version;
+		    int temp = version;
+		    int count = 0; //how many digits the version value is
+		    while(temp != 0){
+		      temp = temp/10;
+		      ++count;
+		    }
+		    char strversion[count];
+		    sprintf(strversion, "%i", version); //convert int to string
+		    char* writeStr = (char*)malloc(sizeof(char)*(strlen(liveptr->fileName)+strlen(liveptr->hash)+strlen(strversion)+10));
+		    strcpy(writeStr, "D ");
+		    strcat(writeStr, strversion);
+		    strcat(writeStr, " ");
+		    strcat(writeStr, serverptr->fileName);
+		    strcat(writeStr, " ");
+		    if(liveptr == NULL){ //hash not computed for client manifest file since its deleted in the current client's directory
+			  strcat(writeStr, serverptr->hash);
+		    }
+		    else{
+			  strcat(writeStr, liveptr->hash);
+		    }
+		    strcat(writeStr, "\n");
+		    write(commitFile, writeStr, strlen(writeStr));
+		    free(writeStr);
 	      }
 	      serverptr = serverptr->next;
 	  }
-	  //now report success if successful
-	  close(commitFile);
+	  int commitSize = lseek(commitFile, 0, SEEK_END); //get length of file
+	  if(commitSize == 0){
+	    printf("No changes detected nor differences between server and manifests found. Deleting empty commit.\n");
+	    close(commitFile);
+	    remove(path);
+	    exit(0);
 	  }
+	  close(commitFile);
+	  commitFile = open(path, O_RDONLY);
+	  //report success
+	  printf("Commit successfully created. Sending commit command request to server.....\n");
+	  int sockfd = connectServer();
+	  //path = "projectName/.Commits/name";
+	  int currentPos = lseek(commitFile, 0, SEEK_CUR);
+	  int size = lseek(commitFile, 0, SEEK_END);    //get length of file
+	  lseek(commitFile, currentPos, SEEK_SET);  //set position back to start
+	  char c[size+1];
+	  //printf("size is %i\n", size);
+	  char* sendStr = (char*)malloc(sizeof(char)*(strlen(projectName)+size+13));
+	  strcpy(sendStr, "commit:");
+	  strcat(sendStr, projectName);
+	  /*strcat(sendStr, ":");
+	  strcat(sendStr, c);*/
+	  //size = size + 1;
+	  write(sockfd, sendStr, strlen(sendStr));
+	  int len = 0;
+	  int timeouts = 0;
+	  sleep(1);
+	  if(read(commitFile, c, size) != 0){
+	    printf("Reading commit file:\n");
+	    c[size+1] = '\0';
+	    printf("%s\n", c);
+	    write(sockfd, c, size);
+	  }
+	  printf("Waiting on server.......\n");
+	  while (!len && ioctl(sockfd,FIONREAD,&len) >= 0){
+		sleep(1);
+		timeouts++;
+		if (timeouts == 5){
+			printf("No error reported by the server. Commit successfully sent to server.\n");
+			close(sockfd);
+			exit(1);
+		}
+	  }
+	  printf("finished sleeps\n");
+	  char buff[len+1]; 
+	  if (len > 0) {
+	      len = read(sockfd, buff, len);
+	  }
+	  //printf("size is %i\n", size);
+	  if (strcmp(buff, "exit") == 0){
+	    printf("Error. Server timed out while creating the commit.\n");
+	    remove(path);
+	    exit(1);
+	  }
+ 	  //close(commitFile);
       }
+}
      
 
 void currentversion(char* projectName){
