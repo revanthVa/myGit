@@ -291,8 +291,7 @@ void commit(char* token, int sockfd){
 			write(sockfd, "exit", 5); //send to client that response failed.
 			remove(path);
 			free(path);
-			close(sockfd);
-			exit(1);
+			return;
 		}
 	    }
 	    char buffer[len];
@@ -1006,8 +1005,8 @@ void rollback(char* token, int sockfd){
 	char* newName = (char*)malloc(sizeof(char)*strlen(projectName)+6);
 	strcpy(newName, projectName);
 	strcat(newName, ".tgz");
-	printf("newName is %s\n", newName);
-	printf("version path is %s\n", versionPath);
+	//printf("newName is %s\n", newName);
+	//printf("version path is %s\n", versionPath);
 	int fileptr = open(versionPath, O_RDONLY);		//send compressed vesion to client
 	if(fileptr == -1){	//rollback version doesn't exist
 		write(sockfd, "exit", 5);
@@ -1060,6 +1059,9 @@ void history(char* token, int sockfd){
 }
 
 void *func(void* vptr_sockfd){ 
+	//lock mutex
+	pthread_mutex_lock(&lock);
+	
     int sockfd = *((int *) vptr_sockfd);
     char buff[MAX]; 
     int n; 
@@ -1118,10 +1120,14 @@ void *func(void* vptr_sockfd){
 	printf("Closing thread.\n");
     }
     else{
-    	printf("Invalid command reached towards server. Exiting.\n");
+    	printf("Invalid command reached towards server.\n");
     }
+    
+    free(copy);
     bzero(buff, MAX); 
     n = 0; 
+    close(sockfd);
+    pthread_mutex_unlock(&lock);
     // copy server message in the buffer 
     //while ((buff[n++] = getchar()) != '\n'); 
     // and send that buffer to client 
@@ -1179,7 +1185,7 @@ int main(int argc, char *argv[])
         printf("Socket successfully binded..\n"); 
   
     // Now server is ready to listen and verification 
-    if ((listen(sockfd, 5)) != 0) { 
+    if ((listen(sockfd, 10)) != 0) { 
         printf("Listen failed...\n"); 
         exit(0); 
     } 
@@ -1189,7 +1195,7 @@ int main(int argc, char *argv[])
   
     // Accept the data packet from client and verification 
     connfd = accept(sockfd, (SA*)&cli, &len); 
-
+	
     while(!(connfd < 0)){
 	  printf("Server accepted the client...\n");
 	  //not sure if this works right here (need to test), thread also creates warning when compiled but works
@@ -1205,11 +1211,11 @@ int main(int argc, char *argv[])
 	  printf("server accept failed...\n"); 
 	  exit(0); 
     } 
-    // Function for chatting between client and server 
+    
     //func(connfd); 
     printf("server closing\n");
 
-    // After chatting close the socket 
+    //close socket at completion
     close(sockfd); 
     return 0;
 } 

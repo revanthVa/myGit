@@ -14,7 +14,7 @@
 #include <sys/ioctl.h>
 #include <openssl/sha.h>
 #include <time.h>
-#define MAX 80 
+#define MAX 512
 #define SA struct sockaddr
 
 typedef struct manifestData{
@@ -33,6 +33,7 @@ typedef struct fileList{	//linked list of file data
 	struct fileList* next;
 }fileList;
 
+pthread_mutex_t lock;	//mutex to lock threads
 manifestData* commitmd = NULL; //linked list for commit manifest data
 manifestData* md = NULL; //linked list for client manifest data
 fileList* fl = NULL;

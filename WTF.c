@@ -52,7 +52,6 @@ int connectServer(){ //gets ip and port from file and connects
 	//printf("Local ip address: %s\n", myIP);
 	if (connect(sockfd,(struct sockaddr*)&serverInfo,sizeof(serverInfo)) != 0){
 		printf("Connection to server failed.\n");
-		exit(1);
 	}
 	else
 		printf("Connection to server successful.....\n");
@@ -60,17 +59,33 @@ int connectServer(){ //gets ip and port from file and connects
 }
 
 void configure(char* ip, char* port){ //create file with IP and port of server
-		int conf;
-		conf = creat("configure", O_APPEND | O_WRONLY | 0600);
-		printf("Configuring.....\n");
-		int len = strlen(ip) + strlen(port) + 3;
-		char *ip_port = (char*) malloc(len);
-		ip_port = strcpy(ip_port, ip);
-		ip_port = strcat(ip_port, "\n"); //seperate IP and port with \n
-		ip_port = strcat(ip_port, port);
-		ip_port = strcat(ip_port, "\n");
-		write(conf, ip_port, strlen(ip_port));
-		printf("Configure successful.\n");
+	//check if port number is valid
+	printf("port is %s\n", port);
+	int i;
+    for(i = 0; i<strlen(port); i++){
+	//printf("current char: %c\n", port[i]);
+		if(!isdigit(port[i])){
+			printf("Invalid port number\n");
+			exit(1);
+		}
+	}
+    int num = atoi(port);
+    printf("num is %i\n", num);
+	if (num < 8000 || num > 65535){
+		printf("Please enter a valid port number between 8000 and 65535\n");
+		exit(1);
+	}
+	int conf;
+	conf = creat("configure", O_APPEND | O_WRONLY | 0600);
+	printf("Configuring.....\n");
+	int len = strlen(ip) + strlen(port) + 3;
+	char *ip_port = (char*) malloc(len);
+	ip_port = strcpy(ip_port, ip);
+	ip_port = strcat(ip_port, "\n"); //seperate IP and port with \n
+	ip_port = strcat(ip_port, port);
+	ip_port = strcat(ip_port, "\n");
+	write(conf, ip_port, strlen(ip_port));
+	printf("Configure successful.\n");
 }
 
 void create(char* name){
@@ -114,7 +129,7 @@ void create(char* name){
     	if(manifestFile == -1){
 	   		printf("cannot create .Manifest\n");
    		}
-    	write(manifestFile, "1", 1);
+    	write(manifestFile, "1\n", 2);
     	close(manifestFile);
     }
     else if (dir){ //checks if local copy has a manifestFile
@@ -689,6 +704,7 @@ void getServerManifestData(char* projectName){
 		free(fileName);
 		free(hash);
 		free(version);
+		close(sockfd);
 	}
 	
 }
@@ -1616,13 +1632,21 @@ void getCommitData(char* projectName){
 }
 
 void push(char* projectName){
-      //getServerManifestData(projectName);
       char* commitPath = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
       commitPath = strcpy(commitPath, projectName);
       commitPath = strcat(commitPath, "/.Commit");
       int commitFile = open(commitPath, O_RDWR);
       if (commitFile == -1){
       	printf(".Commit doesn't exist on the client\n");
+      	exit(1);
+      }
+      
+      getClientManifestData(projectName);
+      getServerManifestData(projectName);
+      
+      if (serverVersion != clientVersion){
+      	printf("Server and client manifest version do not match. Please perform an update+upgrade\n");
+      	remove(commitPath);
       	exit(1);
       }
       
@@ -1638,7 +1662,7 @@ void push(char* projectName){
 			  int currentPos = lseek(file, 0, SEEK_CUR);
 			  int size = lseek(file, 0, SEEK_END); //get length of file
 			  if(size != 0){
-			  	printf("There are pending updates need to be made. Upgrade first and commit again.\n");
+			  	printf("There are pending updates need to be made. Perform an upgrade first\n");
 			  	exit(0);
 			  }
 		  }
@@ -1723,7 +1747,7 @@ void push(char* projectName){
 			//printf("ok\n");
     		sleep(1);
     		timeouts++;
-    		if (timeouts == 5){
+    		if (timeouts == 9){
     			printf("Error no response from server\n");
     			remove(commitPath);
     			close(sockfd);
@@ -1832,7 +1856,7 @@ void rollback(char* projectName, char* version){
 	}
 	//printf("size is %i\n", size);
 	if (strcmp(buff, "exit") == 0){
-		printf("Rollback version does not exist on server\n");
+		printf("Rollback version or project does not exist on server\n");
 		exit(1);
 	}
 }
@@ -1863,7 +1887,7 @@ void history(char* projectName){
 	}
 	//printf("size is %i\n", size);
 	if (strcmp(buff, "exit") == 0){
-		printf("Error. Project or Manifest does not exist on the server\n");
+		printf("Error. Project or .History does not exist on the server\n");
 		exit(1);
 	}
 	printf("%s", buff);
@@ -1872,12 +1896,12 @@ void history(char* projectName){
 
 int main(int argc, char *argv[]){
 	if (argc < 2 || argc > 4){
-		printf("Incorrect number of arguments");
+		printf("Incorrect number of arguments\n");
 		exit(1);
 	}
 	if (strcmp(argv[1],"configure") == 0){
 		if (argc != 4){
-			printf("Incorrect number of arguments for configure");
+			printf("Incorrect number of arguments for configure\n");
 			exit(1);
 		}
 		configure(argv[2], argv[3]);
