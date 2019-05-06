@@ -312,10 +312,10 @@ void removeFile(char* dirName, char* fileName){
 	//filepath = strcpy(filepath, dirName);
 	//filepath = strcat(filepath, "/");
 	//filepath = strcat(filepath, fileName);
-	if (access(fileName, F_OK) == -1){ // file doesn't exist
-		printf("%s doesn't exist\n", fileName);
-		exit(1);
-	}
+	//if (access(fileName, F_OK) == -1){ // file doesn't exist
+		//printf("%s doesn't exist\n", fileName);
+		//exit(1);
+	//}
 	//remove file from manifest
 	char* manifestPath = (char*)malloc(sizeof(char)*(strlen(dirName)+12));
 	manifestPath = strcpy(manifestPath, dirName);
@@ -332,9 +332,9 @@ void removeFile(char* dirName, char* fileName){
 	int tracker = 0;
 	int linesize = 0;
 	char* newFilename = (char*)malloc(sizeof(char)*(strlen(dirName)+17));
-	//newFilename = strcpy(newFilename, dirName);
-	newFilename = strcat(newFilename, "tempfilerename");
-	int newFile = creat(fileName, O_APPEND | O_WRONLY | 0600);
+	newFilename = strcpy(newFilename, dirName);
+	newFilename = strcat(newFilename, "/tempfilerename");
+	int newFile = creat(newFilename, O_APPEND | O_WRONLY | 0600);
 	if(read(manifest, c, size) != 0){
 		if (strstr(c, fileName) == NULL){
 			printf("%s is not in the manifest\n", fileName);
@@ -349,7 +349,7 @@ void removeFile(char* dirName, char* fileName){
 			char* line = (char*)malloc(sizeof(char)*linesize+1);
 			memcpy(line, &c[tracker-linesize], linesize);
 			line[strlen(line)] = '\0';
-			printf("line is %s\n", line);
+			//printf("line is %s\n", line);
 			if (strstr(line, fileName) != NULL){	//skips line
 				tracker++;
 				continue;
@@ -361,8 +361,8 @@ void removeFile(char* dirName, char* fileName){
 	}
 	close(manifest);
 	close(newFile);
-	remove(fileName);
-	rename(newFilename, fileName);
+	remove(manifestPath);
+	rename(newFilename, manifestPath);
 }
 
 void checkout(char* projectName){
@@ -1641,8 +1641,10 @@ void push(char* projectName){
       	exit(1);
       }
       
-      getClientManifestData(projectName);
+      getClientManifestData(projectName);	//for client version #
       getServerManifestData(projectName);
+      
+      
       
       if (serverVersion != clientVersion){
       	printf("Server and client manifest version do not match. Please perform an update+upgrade\n");
