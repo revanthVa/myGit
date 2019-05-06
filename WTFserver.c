@@ -1,43 +1,4 @@
-#include <netdb.h>
-#include <netinet/in.h>
-#include <pthread.h>
-#include <stdlib.h>
-#include <stdio.h> 
-#include <string.h>
-#include <sys/socket.h> 
-#include <sys/types.h> 
-#include <dirent.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <openssl/sha.h>
-#include <time.h>
-#define MAX 80 
-#define SA struct sockaddr 
-
-//gcc WTFserver.c -lpthread -o WTFserver
-
-typedef struct manifestData{
-	char* fileName;
-	char* hash;
-	short flag; // U = 0 M = 1 A = 2 D = 3
-	int version; ////individual file version number for manifest
-	struct manifestData* next;
-}manifestData;
-
-typedef struct fileList{	//linked list of file data
-	int length;
-	int size;
-	char* name;
-	char* data;
-	struct fileList* next;
-}fileList;
-
-manifestData* commitmd = NULL;
-manifestData* md = NULL;
-fileList* fl = NULL;
+#include "WTFserver.h"
 
 char* createDigest(char* fileName, char* digest){
 	int file = open(fileName, O_RDONLY);
@@ -64,115 +25,6 @@ char* createDigest(char* fileName, char* digest){
 		return digest;
     }
 }
-
-/*void getFileData(char* fileName){
-	manifestData* mdPtr = md;
-	fileList* flPtr = fl;
-	while (flPtr->next != NULL){
-		flPtr = flPtr->next;
-	}
-	fileList* tmp = (fileList*)malloc(sizeof(fileList));
-	tmp->length = strlen(fileName);
-	tmp->name = (char*)malloc(sizeof(char)*strlen(fileName)+1);
-	memcpy(tmp->name, fileName, strlen(fileName));
-	tmp->name[strlen(fileName)] = '\0';
-	//printf("tmp file length is %i\n", tmp->length);
-	//printf("tmp file name is %s\n", tmp->name);
-	int fileptr = open(fileName, O_RDONLY);
-	if(fileptr == -1){
-		printf("cannot open file\n");
-		exit(1);
-	}
-	int currentPos = lseek(fileptr, 0, SEEK_CUR);
-	int size = lseek(fileptr, 0, SEEK_END);    //get length of file
-	lseek(fileptr, currentPos, SEEK_SET); 	//set position back to start
-	tmp->size = size;
-	//printf("first file size is %i\n", tmp->size);
-	char c[size+1];
-	c[size] = '\0';
-	if(read(fileptr, c, size) != 0){
-		tmp->data = (char*)malloc(sizeof(char)*size+1);
-		strcpy(tmp->data, c);
-	}
-	printf("file has this data: \n%s", tmp->data);
-	close(fileptr);
-	flPtr->next = tmp;
-}
-
-void createManifestData(char* project){
-	char* path = (char*)malloc(sizeof(char)*(strlen(project)+12));
-	path = strcpy(path, project);
-	path = strcat(path, "/.Manifest");
-	int manifestFile;
-	manifestFile = open(path, O_RDONLY);
-	if(manifestFile == -1){
-		printf("cannot open .Manifest\n");
-		exit(1);
-	}
-	md = (manifestData*)malloc(sizeof(manifestData));
-	fl = (fileList*)malloc(sizeof(fileList));
-	md->file = fl;
-	md->numberOfFiles = 1;
-	fl->length = strlen(path);
-	fl->name = (char*)malloc(sizeof(char)*strlen(path)+1);
-	memcpy(fl->name, path, strlen(path));
-	fl->name[strlen(path)] = '\0';
-	printf("manifest length is %i\n", md->file->length);
-	printf("manifest name is %s\n", md->file->name);
-	int currentPos = lseek(manifestFile, 0, SEEK_CUR);
-	int size = lseek(manifestFile, 0, SEEK_END);    //get length of file
-	lseek(manifestFile, currentPos, SEEK_SET);  //set position back to start
-	md->file->size = size;
-	printf("manifest size is %i\n", md->file->size);
-	
-	char c[size+1];
-	c[size] = '\0';
-	int tracker = 0;
-	int linesize = 0;
-	if(read(manifestFile, c, size) != 0){
-	md->file->data = (char*)malloc(sizeof(char)*size+1);
-	strcpy(md->file->data, c);
-	//printf("manifest has this data: %s\n", md->file->data);
-		while (tracker < size){
-			linesize = 0;
-			while (c[tracker] != '\n'){
-				tracker++;
-				linesize++;
-			}
-			if (linesize <2){ //skips first line
-				tracker++;
-				continue;	//line doces not have contain a filename
-			}
-			char* line = (char*)malloc(sizeof(char)*linesize+1);
-			memcpy(line, &c[tracker-linesize], linesize);
-			line[strlen(line)] = '\0';
-			//printf("line is %s\n", line);
-			int numPosition = tracker+2-linesize;
-			int numSize = 0;
-			while (c[numPosition] != ' '){	//gets length of version
-				numPosition++;
-				numSize++;
-				if (numSize > 500){
-					printf("error\n");
-					exit(1);
-				}
-			}
-			char* version = (char*)malloc(sizeof(char)*(numSize+1));
-			version[strlen(version)] = '\0';
-			memcpy(version, &c[tracker+2-linesize], numSize);
-			//printf("version is %s\n", version);
-			int fileNameSize = linesize-44-strlen(version)+1; //with null teminator
-			char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
-			memcpy(fileName, &c[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
-			fileName[strlen(fileName)] = '\0';
-			//printf("version length %i\n", strlen(version));
-			printf("fileName is %s\n", fileName);
-			getFileData(fileName);
-		}
-	}
-	close(manifestFile);
-}
-*/
 
 void DeleteAll(char* pathorfile){ //implements recursive function to delete all files and subdirectories of server folder
    //printf("Current path: %s\n", pathorfile);
@@ -582,38 +434,37 @@ void upgrade(char* token, int sockfd, char* copy){
 }
 
 int checkCommits(char* commitsDir, char* digest){ //checks .Commits folder for equal digest. return 1 for success 0 for failure
-DIR* dir;
-struct dirent *ent;
-if ((dir = opendir(commitsDir)) != NULL){
-	while ((ent = readdir(dir)) != NULL){
-		if (ent->d_type == DT_REG){		//is a regular file
-			//printf("dp stuff\n");
-			char* newDigest = (char*)malloc(sizeof(char)*41);
-			newDigest[41] = '\0';
-			//printf("ent name is %s\n",ent->d_name);
-			char* commitDigestPath = (char*)malloc(sizeof(char)*(strlen(commitsDir)+strlen(ent->d_name)+4));
-			strcpy(commitDigestPath, commitsDir);
-			strcat(commitDigestPath, "/");
-			strcat(commitDigestPath, ent->d_name);
-			newDigest = createDigest(commitDigestPath, digest);
-			//printf("new digest is %s\n",  newDigest);
-			if (strcmp(digest, newDigest) == 0){
-				//printf("they are equal\n");
-				free(newDigest);
-				free(commitDigestPath);
-				return 1;
-			}
-			free(newDigest);
-			free(commitDigestPath);
-		}
-	}
+	DIR* dir;
+	struct dirent *ent;
+	if ((dir = opendir(commitsDir)) != NULL){
+	    while ((ent = readdir(dir)) != NULL){
+		    if (ent->d_type == DT_REG){		//is a regular file
+			    //printf("dp stuff\n");
+			    char* newDigest = (char*)malloc(sizeof(char)*41);
+			    newDigest[41] = '\0';
+			    //printf("ent name is %s\n",ent->d_name);
+			    char* commitDigestPath = (char*)malloc(sizeof(char)*(strlen(commitsDir)+strlen(ent->d_name)+4));
+			    strcpy(commitDigestPath, commitsDir);
+			    strcat(commitDigestPath, "/");
+			    strcat(commitDigestPath, ent->d_name);
+			    newDigest = createDigest(commitDigestPath, digest);
+			    //printf("new digest is %s\n",  newDigest);
+			    if (strcmp(digest, newDigest) == 0){
+				    //printf("they are equal\n");
+				    free(newDigest);
+				    free(commitDigestPath);
+				    return 1;
+			    }
+			    free(newDigest);
+			    free(commitDigestPath);
+		    }
+	    }
 	closedir(dir);
-}
-else{
-	return 0; //failed because directory doesn't exist
-}
-
-return 0;
+	}
+	else{
+		return 0; //failed because directory doesn't exist
+	}
+	return 0;
 }
 
 void addCommitData(char* fileName, char* hash, int version, short flag){
