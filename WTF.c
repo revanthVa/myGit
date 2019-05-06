@@ -408,13 +408,22 @@ void checkout(char* projectName){
 	//read(sockfd, buff, 339);
 	int len = 0;
 	int totalSize = 0;
+	int timeouts = 0;
 	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
 	  sleep(1);
+	  timeouts++;
+	  if (timeouts == 5){
+	  	printf("Error no response from server");
+	  }
 	}
 	char buff[len]; 
 	if (len > 0) {
   		len = read(sockfd, buff, len);
   		totalSize += len;
+	}
+	if (strcmp(buff, "exit") == 0){
+		printf("Error. Server timed out while creating the commit.\n");
+		exit(1);
 	}
 	//printf("totalSize is %i\n", totalSize);
 	char* createTar = (char*)malloc(sizeof(char)*strlen(projectName)+5);
@@ -1271,7 +1280,7 @@ void currentversion(char* projectName){
     	sleep(1);
     	timeouts++;
 		if (timeouts == 5){
-			printf("Erorr. Server timed out\n");
+			printf("Error no response from server\n");
 			close(sockfd);
 			exit(1);
 		}

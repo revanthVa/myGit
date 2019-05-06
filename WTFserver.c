@@ -286,7 +286,10 @@ void checkout(char* token, int sockfd){
     	char* commitsFolder = (char*)malloc(sizeof(char)*strlen(token)+11);
     	strcpy(commitsFolder, token);
     	strcat(commitsFolder, "/.Commits");
-    	int malloclength = (strlen(token)*2)+strlen(versionsFolder)+strlen(commitsFolder)+48;
+    	char* historyPath = (char*)malloc(sizeof(char)*strlen(token)+11);
+    	strcpy(historyPath, token);
+    	strcat(historyPath, "/.History");
+    	int malloclength = (strlen(token)*2)+strlen(versionsFolder)+strlen(commitsFolder)+strlen(historyPath)+66;
     	char* systemStr = (char*)malloc(sizeof(char)*malloclength);
     	strcpy(systemStr, "tar cfz ");
     	strcat(systemStr, token);
@@ -297,9 +300,13 @@ void checkout(char* token, int sockfd){
 		strcat(systemStr, "--exclude='");
 		strcat(systemStr, commitsFolder);
 		strcat(systemStr, "' ");
+		strcat(systemStr, "--exclude='");
+		strcat(systemStr, historyPath);
+		strcat(systemStr, "' ");
     	strcat(systemStr, token);
     	
     	system(systemStr);
+    	free(historyPath);
     	free(versionsFolder);
     	free(commitsFolder);
     	free(systemStr);
@@ -339,6 +346,7 @@ void checkout(char* token, int sockfd){
 			//new = creat("work.tgz", O_APPEND | O_RDWR | 0600);
 			write(sockfd, sendtar, size);
 			remove(tarFile);
+			free(tarFile);
     	}
     }
     else if (ENOENT == errno)	//directory doesn't exist
@@ -879,11 +887,13 @@ void createBackup(char* projectName){
 		strcat(backupName, "/");
 		strcat(backupName, projectName);
 		strcat(backupName, "1.tgz");
-		
-		char* createTar = (char*)malloc(sizeof(char)*strlen(backupName)+strlen(projectName)+13);
+		int malloclength = strlen(backupName) + strlen(projectName) + strlen(versionsFolder)+ 28;
+		char* createTar = (char*)malloc(sizeof(char)*malloclength);
 		strcpy(createTar, "tar cfz ");
 		strcat(createTar, backupName);
-		strcat(createTar, " ");
+		strcat(createTar, " --exclude='");
+		strcat(createTar, versionsFolder);
+		strcat(createTar, "' ");
 		strcat(createTar, projectName);
 		//printf("the backups folder name is %s\n", createTar);
 		system(createTar);
@@ -911,10 +921,13 @@ void createBackup(char* projectName){
 		strcat(backupName, projectName);
 		strcat(backupName, strVer);
 		strcat(backupName,".tgz");
-		char* createTar = (char*)malloc(sizeof(char)*strlen(backupName)+strlen(projectName)+strlen(versionsFolder)+13);
+		int malloclength = strlen(backupName)*2 + strlen(projectName) + 28;
+		char* createTar = (char*)malloc(sizeof(char)*malloclength);
 		strcpy(createTar, "tar cfz ");
 		strcat(createTar, backupName);
-		strcat(createTar, " ");
+		strcat(createTar, " --exclude='");
+		strcat(createTar, backupName);
+		strcat(createTar, "' ");
 		strcat(createTar, projectName);
 		//printf("the backups folder name is %s\n", createTar);
 		system(createTar);
@@ -979,6 +992,7 @@ void pushHistory(char* commitPath, char* projectName ){
 			  		memcpy(totalVersion, &c[tracker-linesize], linesize);
 			  		totalVersion[linesize] = '\0';
 			  		write(historyFile, "\n", 1);
+			  		write(historyFile, "push\n", 5);
 			  		write(historyFile, totalVersion, strlen(totalVersion));
 			  		write(historyFile, "\n", 1);
 			  		free(totalVersion);
@@ -1000,7 +1014,6 @@ void pushHistory(char* commitPath, char* projectName ){
 	if(read(commitFile, c, size) != 0){
 		//printf("reading manifest\n");
 	    write(historyFile, c, size);
-	    write(historyFile, "\n", 1);
 	}
 	
 	free(manifestPath);
