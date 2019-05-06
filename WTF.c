@@ -1510,6 +1510,7 @@ void upgrade(char* projectName){
    			getLiveManifestData(projectName);
    			//upgradeDelete();
    			upgradeUM(projectName);
+   			remove(updatePath);
 		}
 	}
 	else if (ENOENT == errno){	//directory doesn't exist
