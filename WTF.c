@@ -1,46 +1,4 @@
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <math.h>
-#include <netdb.h>
-#include <sys/socket.h> 
-#include <sys/ioctl.h>
-#include <dirent.h>
-#include <errno.h>
-#include <openssl/sha.h>
-#include <sys/ioctl.h>
-#include <time.h>
-#define MAX 80 
-
-//gcc -g -o WTF WTF.c -lssl -lcrypto
-typedef struct manifestData{
-	char* fileName;
-	char* hash;
-	short flag; // U = 0 M = 1 A = 2 D = 3
-	int version; ////individual file version number for manifest
-	struct manifestData* next;
-}manifestData;
-
-typedef struct updateData{
-	char* fileName;
-	short flag;	// U = 0 M = 1 A = 2 D = 3
-	struct updateData* next;
-}updateData;
-
-manifestData* servermd = NULL;
-manifestData* clientmd = NULL;
-manifestData* livemd = NULL;
-manifestData* commitmd = NULL;
-updateData* ud = NULL;
-
-int serverVersion = -1;
-int clientVersion = -1;
-
+#include "WTF.h"
 
 int connectServer(){ //gets ip and port from file and connects
 	int conf;
@@ -130,7 +88,7 @@ void create(char* name){
 		sleep(1);
 		timeouts++;
 		if (timeouts == 5){
-			printf("Erorr. Server timed out\n");
+			printf("Error. Server timed out\n");
 			close(sockfd);
 			exit(1);
 		}
@@ -1657,7 +1615,7 @@ void getCommitData(char* projectName){
 	close(commitFile);
 }
 
-void push(char* projectName){	//check if commit exists fsfsdsfdsfsfdssfds
+void push(char* projectName){
       //getServerManifestData(projectName);
       char* commitPath = (char*)malloc(sizeof(char)*(strlen(projectName)+10));
       commitPath = strcpy(commitPath, projectName);
