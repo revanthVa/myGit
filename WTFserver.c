@@ -4,7 +4,7 @@ char* createDigest(char* fileName, char* digest){
 	int file = open(fileName, O_RDONLY);
 	if (file == -1){
 	    printf("File does not exist\n");
-	    //exit(1);
+	    return;	//should never happen
 	}
 	else{
 		int currentPos = lseek(file, 0, SEEK_CUR);
@@ -75,9 +75,9 @@ void createHistory(char* projectName){
 }
 
 void create(char* token, int sockfd){
-    printf("token is %s\n", token);
+    //printf("token is %s\n", token);
     token = strtok(NULL, " "); 
-    printf("name: %s\n", token);
+    //printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
     	printf("Project already exists. Create failed.\n");
@@ -128,10 +128,10 @@ void destroy(char* token){ //need to edit later on how to expire pending commits
 void checkout(char* token, int sockfd){
     //printf("token is %s\n", token);
     token = strtok(NULL, " "); 
-    printf("name: %s\n", token);
+    //printf("name: %s\n", token);
     DIR* dir = opendir(token);
     if (dir){	//directory exists
-    	printf("Project exists\n");
+    	//printf("Project exists\n");
     	char* versionsFolder = (char*)malloc(sizeof(char)*strlen(token)+12);
     	strcpy(versionsFolder, token);
     	strcat(versionsFolder, "/.Versions");
@@ -167,7 +167,7 @@ void checkout(char* token, int sockfd){
     	strcpy(tarFile, token);
     	strcat(tarFile, ".tgz");
     	tarFile[strlen(token)+4] = '\0';
-    	printf("tarFile is %s\n", tarFile);
+    	//printf("tarFile is %s\n", tarFile);
     	int fileptr = open(tarFile, O_RDONLY);
 		if(fileptr == -1){
 			printf("cannot open .Manifest\n");
@@ -204,7 +204,7 @@ void checkout(char* token, int sockfd){
     else if (ENOENT == errno)	//directory doesn't exist
     {
         printf("Project does not exist. Checkout failed.\n");
-        exit(1);
+        return;
     }
 }
 
@@ -247,7 +247,7 @@ void update(char* token, int sockfd){	//send manifest to client
 void commit(char* token, int sockfd){
 	//printf("token is %s\n", token);
 	token = strtok(NULL, " "); //commit project name
-	printf("commit project name: %s\n", token);
+	//printf("commit project name: %s\n", token);
 	char *dirpath = (char*)malloc(sizeof(char)*(strlen(token)+10));
 	strcpy(dirpath, token);
 	strcat(dirpath, "/.Commits");
@@ -257,7 +257,7 @@ void commit(char* token, int sockfd){
 	if (dir){	//directory exists
 	    dir = opendir(dirpath);
 	    if(ENOENT == errno){ //no .Commits folder yet, so make mkdir()
-		printf("no .Commits folder. Creating it.\n");
+		//printf("no .Commits folder. Creating it.\n");
 		int directory = mkdir(dirpath, 0700);
 		dir = opendir(dirpath);
 	    }
@@ -278,7 +278,7 @@ void commit(char* token, int sockfd){
 	    strcpy(path, token);
 	    strcat(path, "/.Commits/");
 	    strcat(path, commitName);
-	    printf("full path of commit: %s\n", path);
+	    //printf("full path of commit: %s\n", path);
 	    int commitFile = creat(path, O_APPEND | O_RDWR | 0600);
 	    //token = strtok(NULL, " ");  //contents of commit file sent
 	    int len = 0;
@@ -296,11 +296,11 @@ void commit(char* token, int sockfd){
 	    }
 	    char buffer[len];
 	    if (len > 0) {
-	      printf("reading buffer\n");
+	      //printf("reading buffer\n");
 	      len = read(sockfd, buffer, len);
 	    }
 	    buffer[len] = '\0';
-	    printf("This is the commit contents:\n%s", buffer);
+	    //printf("This is the commit contents:\n%s", buffer);
 	    write(commitFile, buffer, strlen(buffer));
 	    free(strrandmal);
 	    free(commitName);
@@ -418,7 +418,8 @@ void upgrade(char* token, int sockfd, char* copy){
     	int fileptr = open(createTar, O_RDONLY);
 		if(fileptr == -1){
 			printf("cannot open tar file\n");
-			exit(1);
+			write(sockfd, "exit", 5);
+			return;
 		}
 		int currentPos = lseek(fileptr, 0, SEEK_CUR);
 		int size = lseek(fileptr, 0, SEEK_END);    //get length of file
@@ -1032,7 +1033,7 @@ void rollback(char* token, int sockfd){
 
 void history(char* token, int sockfd){
 	token = strtok(NULL, ":");
-	printf("token is %s\n", token);
+	//printf("token is %s\n", token);
 	char* historyPath = (char*)malloc(sizeof(char)*strlen(token)+11);
 	strcpy(historyPath, token);
 	strcat(historyPath, "/.History");
@@ -1070,12 +1071,12 @@ void *func(void* vptr_sockfd){
     // read the message from client and copy it in buffer 
     read(sockfd, buff, sizeof(buff)); 
     // print buffer which contains the client contents 
-    printf("From client: %s\t To client: ", buff);
+    //printf("From client: %s\t To client: ", buff);
     char* copy = (char*)malloc(sizeof(char)*strlen(buff)+1);
     strcpy(copy, buff);
     copy[strlen(buff)] = '\0';
     char* token = strtok(buff, ":");
-    printf("token is %s\n", token);
+    //printf("token is %s\n", token);
     if (strcmp(token, "create") == 0){
     	printf("Performing create command....\n");
     	create(token, sockfd);
@@ -1167,9 +1168,9 @@ int main(int argc, char *argv[])
 	exit(0);
       }
     }
-    printf("Valid port number used....\n");
+    //printf("Valid port number used....\n");
     int num = atoi(port);
-    printf("i am the num converted port: %i\n", num);
+    //printf("i am the num converted port: %i\n", num);
     
     // assign IP, PORT 
     servaddr.sin_family = AF_INET; 

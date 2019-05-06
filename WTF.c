@@ -60,7 +60,7 @@ int connectServer(){ //gets ip and port from file and connects
 
 void configure(char* ip, char* port){ //create file with IP and port of server
 	//check if port number is valid
-	printf("port is %s\n", port);
+	//printf("port is %s\n", port);
 	int i;
     for(i = 0; i<strlen(port); i++){
 	//printf("current char: %c\n", port[i]);
@@ -70,7 +70,7 @@ void configure(char* ip, char* port){ //create file with IP and port of server
 		}
 	}
     int num = atoi(port);
-    printf("num is %i\n", num);
+    //printf("num is %i\n", num);
 	if (num < 8000 || num > 65535){
 		printf("Please enter a valid port number between 8000 and 65535\n");
 		exit(1);
@@ -375,7 +375,7 @@ void checkout(char* projectName){
 	char *str = (char*)malloc(sizeof(char)*(strlen(projectName)+11));
 	str = strcpy(str, "checkout:");
 	str = strcat(str, projectName);
-	printf("str is %s\n", str);
+	//printf("str is %s\n", str);
 	printf("Sending checkout command request to server.....\n");
 	write(sockfd, str, strlen(str));
 	//read(sockfd, buff, 339);
@@ -1347,7 +1347,7 @@ void addUpdateData(char* fileName, short flag){
 		tmp->flag = flag;
 		tmp->next = NULL;
 		udptr->next = tmp;
-		printf("%s %i\n", udptr->next->fileName, udptr->next->flag);
+		//printf("%s %i\n", udptr->next->fileName, udptr->next->flag);
 	}
 }
 
@@ -1427,22 +1427,22 @@ void upgradeUM(char* projectName){
 		length = length + strlen(udPtr->fileName)+2;	//+2 for : and \0
 		udPtr = udPtr->next;
 	}
-	printf("length is %i\n", length);
+	//printf("length is %i\n", length);
 	char* sendStr = (char*)malloc(sizeof(char)*(strlen(projectName)*2)+23+length);
 	strcpy(sendStr, "upgrade:");
 	strcat(sendStr, projectName);	//a token will be projectName so server knows the projectName
 	strcat(sendStr, ":");
 	strcat(sendStr, projectName);
 	strcat(sendStr, "/.Manifest:");
-	printf("send str %s\n", sendStr);
+	//printf("send str %s\n", sendStr);
 	
 	udPtr = ud;
 	while (udPtr != NULL){
 		if (udPtr->flag == 1 || udPtr->flag == 2){
-			printf("yes\n");
+			//printf("yes\n");
 			strcat(sendStr, udPtr->fileName);
 			strcat(sendStr, ":");
-			printf("sendstr is %s\n", sendStr);
+			//printf("sendstr is %s\n", sendStr);
 		}
 		udPtr = udPtr->next;
 	}
