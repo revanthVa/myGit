@@ -81,6 +81,28 @@ void create(char* name){
     int sockfd = connectServer();
     printf("Sending create command request to server.....\n");
     write(sockfd, str, strlen(str)+1);
+    
+    int len = 0;
+    int timeouts = 0;
+    while (!len && ioctl(sockfd,FIONREAD,&len) >= 0){
+		sleep(1);
+		timeouts++;
+		if (timeouts == 5){
+			printf("Error. Server timed out\n");
+			close(sockfd);
+			exit(1);
+		}
+	  }
+	  char buff[len+1]; 
+	  if (len > 0) {
+	      len = read(sockfd, buff, len);
+	  }
+	  //printf("size is %i\n", size);
+	  if (strcmp(buff, "exit") == 0){
+	    printf("Create failed. Directory may already exist on server\n");
+	    exit(1);
+	  }
+    
     DIR* dir = opendir(name);
     char* path = (char*)malloc(sizeof(char)*(strlen(name)+12));
     path = strcpy(path, name);
@@ -90,20 +112,21 @@ void create(char* name){
     	int manifestFile;
     	manifestFile = creat(path, O_WRONLY | 0600);
     	if(manifestFile == -1){
-	   printf("cannot create .Manifest\n");
-   	}
+	   		printf("cannot create .Manifest\n");
+   		}
     	write(manifestFile, "1", 1);
     	close(manifestFile);
     }
     else if (dir){ //checks if local copy has a manifestFile
+      printf("directory already exists on client\n");
       int file = open(path, O_RDONLY);
       if (file == -1){
-	  printf("The project was created successfully in the server repository but creating it in local repository failed because a directory with that name already exists. Please remove/rename and use checkout to obtain a copy of the newly created project.\n");
+	  printf("\n");
 	  exit(1);
       }
       close(file);
     }
-    char buff[MAX];
+    //char buff[MAX];
     //read(sockfd, buff, sizeof(buff));
     //printf("buff is %s\n", buff);
     close(sockfd);
@@ -1201,8 +1224,15 @@ void currentversion(char* projectName){
 	write(sockfd, sendStr, strlen(sendStr));
 	int len = 0;
 	int size = 0;
+	int timeouts = 0;
 	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
     	sleep(1);
+    	timeouts++;
+		if (timeouts == 5){
+			printf("Erorr. Server timed out\n");
+			close(sockfd);
+			exit(1);
+		}
     }
     char buff[len+1]; 
 	if (len > 0) {
@@ -1225,19 +1255,19 @@ void currentversion(char* projectName){
 		}
 		if (linesize < 10){ //skips first line
 			if (firstline == 0){	//gets version of manifest on first line
-				char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
-				memcpy(totalVersion, &buff[tracker-linesize], linesize);
-				totalVersion[linesize] = '\0';
-				serverVersion = atoi(totalVersion);
+				//char* totalVersion = (char*)malloc(sizeof(char)*linesize+1);
+				//memcpy(totalVersion, &buff[tracker-linesize], linesize);
+				//totalVersion[linesize] = '\0';
+				//serverVersion = atoi(totalVersion);
 				//printf("totalVersion is %i\n", clientVersion);
 				firstline++;
 			}
 			tracker++;
 			continue;	//line doces not have contain a filename
 		}
-		char* line = (char*)malloc(sizeof(char)*linesize+1);
-		memcpy(line, &buff[tracker-linesize], linesize);
-		line[linesize] = '\0';
+		//char* line = (char*)malloc(sizeof(char)*linesize+1);
+		//memcpy(line, &buff[tracker-linesize], linesize);
+		//line[linesize] = '\0';
 		//printf("line is %s\n", line);
 		int numPosition = tracker+2-linesize;
 		int numSize = 0;
@@ -1259,15 +1289,15 @@ void currentversion(char* projectName){
 		char* fileName = (char*)malloc(sizeof(char)*fileNameSize);
 		memcpy(fileName, &buff[(tracker-linesize)+3+strlen(version)], fileNameSize-1);
 		fileName[fileNameSize-1] = '\0';
-		char* hash = (char*)malloc(sizeof(char)*41);
-		memcpy(hash, &buff[tracker-linesize+strlen(version)+strlen(fileName)+4], 40);
-		hash[41] = '\0';
+		//char* hash = (char*)malloc(sizeof(char)*41);
+		//memcpy(hash, &buff[tracker-linesize+strlen(version)+strlen(fileName)+4], 40);
+		//hash[41] = '\0';
 		printf("%s ", fileName);
 		printf("%s\n", version);
 		//printf("hash is %s\n", hash);
 		//addManifestData(fileName, hash, ver, 1);
 		free(fileName);
-		free(hash);
+		//free(hash);
 		free(version);
 	}
 	close(sockfd);
@@ -1807,8 +1837,15 @@ void history(char* projectName){
 	write(sockfd, sendStr, strlen(sendStr)+1);
 	int len = 0;
 	int size = 0;
+	int timeouts = 0;
 	while (!len && ioctl (sockfd,FIONREAD,&len) >= 0){
     	sleep(1);
+    	timeouts++;
+		if (timeouts == 5){
+			printf("Erorr. Server timed out\n");
+			close(sockfd);
+			exit(1);
+		}
     }
     char buff[len+1]; 
 	if (len > 0) {
