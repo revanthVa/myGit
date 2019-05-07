@@ -1171,7 +1171,10 @@ int main(int argc, char *argv[])
     //printf("Valid port number used....\n");
     int num = atoi(port);
     //printf("i am the num converted port: %i\n", num);
-    
+    if (num < 8000 || num > 65535){
+		printf("Please enter a valid port number between 8000 and 65535\n");
+		exit(1);
+	}
     // assign IP, PORT 
     servaddr.sin_family = AF_INET; 
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
