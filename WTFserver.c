@@ -70,7 +70,7 @@ void createHistory(char* projectName){
 	strcat(historyPath, "/.History");
 	int historyFile = creat(historyPath, O_WRONLY | 0600);
 	write(historyFile, "create\n1\n", 9);
-	close(historyPath);
+	close(historyFile);
 	free(historyPath);
 }
 

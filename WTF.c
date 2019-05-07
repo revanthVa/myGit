@@ -137,7 +137,7 @@ void create(char* name){
       printf("directory already exists on client\n");
       int file = open(path, O_RDONLY);
       if (file == -1){
-	  printf("\n");
+	  printf("The project was created successfully in the server repository but creating it in local repository failed because a directory with that name already exists. Please remove/rename and use checkout to obtain a copy of the newly created project.\n");
 	  exit(1);
       }
       close(file);
