@@ -52,6 +52,7 @@ int connectServer(){ //gets ip and port from file and connects
 	//printf("Local ip address: %s\n", myIP);
 	if (connect(sockfd,(struct sockaddr*)&serverInfo,sizeof(serverInfo)) != 0){
 		printf("Connection to server failed.\n");
+		exit(1);
 	}
 	else
 		printf("Connection to server successful.....\n");
